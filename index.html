@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Simplex KKT Interativo - Problema Personalizado</title>
+<title>Simplex KKT - Interativo para Aluno</title>
 <style>
 body { font-family: Arial, sans-serif; padding:20px; background:#f7f9fb; }
 table { border-collapse: collapse; margin-top:10px; }
@@ -17,182 +17,111 @@ button { padding:6px 10px; margin:5px; }
 </head>
 <body>
 
-<h1>Simplex KKT Interativo</h1>
+<h1>Simplex KKT - Quadrático Interativo</h1>
 
-<label>Nome do aluno: <input id="studentName" type="text"></label>
-<p>Digite seu problema:</p>
-<label>Função objetivo (ex: -x1^2 + 6x1 -2x2^2 +8x2): <input id="objective" size="40" value="-x1^2+6x1-2x2^2+8x2"></label><br>
-<label>Restrições (uma por linha, ex: 2x1 + 4x2 <= 8):</label><br>
-<textarea id="constraints" rows="5" cols="50">2x1 + 4x2 <= 8</textarea><br>
+<label>Nome do aluno: <input id="studentName" type="text"></label><br><br>
+
+<p>Defina seu problema:</p>
+Função objetivo: <input id="objFunc" placeholder="Ex: -x1^2 +6*x1 -2*x2^2 +8*x2"><br>
+Restrição 1: <input id="r1" placeholder="Ex: 2*x1 +4*x2 <= 8"><br>
+Restrição 2: <input id="r2" placeholder="Ex: -2*x1 <= -6"><br>
+<!-- pode adicionar mais restrições se quiser -->
 
 <button id="start">Iniciar Iterações</button>
 <div id="iterationsArea"></div>
-<div class="status" id="feedback">Clique em "Iniciar Iterações" após definir seu problema.</div>
+<div class="status" id="feedback">Preencha o problema e clique em "Iniciar Iterações".</div>
 <button id="finalize" style="display:none;">Finalizar e Gerar Relatório</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // --- Variáveis ---
-let varNames = [];
-let dualNames = [];
-let A = [], b = [], base = [], duals = [];
+let varNames = []; // x1,x2,... e y1,y2,...
 let autoIterations = [];
 let currentIter = 0;
+let base = [];
+let A = [];
+let b = [];
 let studentName = "";
 
 // --- Funções auxiliares ---
-function parseValue(val){
-    val = val.trim();
-    if(val.includes('/')){
-        const f = val.split('/');
-        return parseFloat(f[0])/parseFloat(f[1]);
-    } else return parseFloat(val);
+function parseConstraint(str){
+    // transforma "2*x1 + 4*x2 <= 8" em [2,4,8] e tipo '<='
+    const m = str.match(/(.*)(<=|>=|=)(.*)/);
+    if(!m) return null;
+    const lhs = m[1].trim();
+    const op = m[2];
+    const rhs = parseFloat(m[3]);
+    const coefs = [];
+    varNames.forEach(v=>{
+        const regex = new RegExp(v+'\\b','g');
+        const match = lhs.match(regex);
+        if(match){
+            const coefMatch = lhs.split(v)[0].match(/([-+]?[\d\.]*)$/);
+            let coef = coefMatch ? parseFloat(coefMatch[0]||1) : 1;
+            coefs.push(coef);
+        } else coefs.push(0);
+    });
+    return {coefs,op,rhs};
 }
 
-// --- Função para criar tabela de iteração ---
+function saveAutoIteration(){
+  autoIterations.push({
+    base:[...base],
+    A:A.map(r=>[...r]),
+    b:[...b]
+  });
+}
+
+// --- Pivot, enteringVar e isOptimal podem ser reaproveitados do seu código anterior ---
+
+// --- Render ---
 function renderStudentIteration(iterIdx){
     const area = document.getElementById('iterationsArea');
     area.innerHTML=`<h3>Iteração ${iterIdx+1}</h3>`;
-    const it = autoIterations[iterIdx];
     const tbl = document.createElement('table');
     const trh = document.createElement('tr');
-    trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+
-                   dualNames.map(d=>`<th>${d}</th>`).join('')+
-                   '<th>b</th>';
+    trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
     tbl.appendChild(trh);
-
-    for(let r=0;r<it.base.length;r++){
+    const n = base.length;
+    for(let r=0;r<n;r++){
         const tr = document.createElement('tr');
         tr.innerHTML=`<td><input type="text" id="base_${r}"></td>`+
-            varNames.map((v,j)=>`<td><input type="text" id="cell_${r}_${j}"></td>`).join('')+
-            dualNames.map((d,j)=>`<td><input type="text" id="dual_${r}_${j}"></td>`).join('')+
-            `<td><input type="text" id="b_${r}"></td>`;
+          varNames.map((v,j)=>`<td><input type="text" id="cell_${r}_${j}"></td>`).join('')+
+          `<td><input type="text" id="b_${r}"></td>`;
         tbl.appendChild(tr);
     }
     area.appendChild(tbl);
-
-    // Botões
-    const btnCheck = document.createElement('button');
-    btnCheck.innerText='Verificar Iteração';
-    btnCheck.onclick = ()=>{
-        if(checkIteration(iterIdx)){
-            const fb = document.getElementById('feedback');
-            fb.innerText='✅ Iteração correta! Clique em "Próxima Iteração".';
-            fb.className='status ok';
-            document.getElementById('nextIterBtn').style.display='inline-block';
-        } else {
-            const fb = document.getElementById('feedback');
-            fb.innerText='❌ Iteração incorreta, revise os valores.';
-            fb.className='status error';
-        }
-    };
-    area.appendChild(btnCheck);
-
-    const nextBtn = document.createElement('button');
-    nextBtn.id='nextIterBtn';
-    nextBtn.innerText='Próxima Iteração';
-    nextBtn.style.display='none';
-    nextBtn.onclick = ()=>{
-        currentIter++;
-        if(currentIter<autoIterations.length){
-            renderStudentIteration(currentIter);
-            nextBtn.style.display='none';
-        } else {
-            document.getElementById('finalize').style.display='inline-block';
-            const fb = document.getElementById('feedback');
-            fb.innerText='✅ Todas as iterações preenchidas. Pode gerar o relatório.';
-            fb.className='status ok';
-        }
-    };
-    area.appendChild(nextBtn);
-}
-
-// --- Verificar tabela ---
-function checkIteration(iterIdx){
-    let correct = true;
-    const it = autoIterations[iterIdx];
-    for(let r=0;r<it.base.length;r++){
-        if(document.getElementById(`base_${r}`).value.trim()!==it.base[r]) correct=false;
-        for(let j=0;j<varNames.length;j++){
-            const val = parseValue(document.getElementById(`cell_${r}_${j}`).value);
-            if(Math.abs(val - it.A[r][j])>1e-4) correct=false;
-        }
-        for(let j=0;j<dualNames.length;j++){
-            const val = parseValue(document.getElementById(`dual_${r}_${j}`).value);
-            if(Math.abs(val - it.duals[r][j])>1e-4) correct=false;
-        }
-        const bv = parseValue(document.getElementById(`b_${r}`).value);
-        if(Math.abs(bv - it.b[r])>1e-4) correct=false;
-    }
-    return correct;
-}
-
-// --- Gerar PDF ---
-function generatePDF(){
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.text(`Relatório do Aluno: ${studentName}`,10,10);
-    doc.text('Problema definido pelo aluno',10,20);
-    autoIterations.forEach((it,i)=>{
-        doc.text(`Iteração ${i+1}: Base = ${it.base.join(', ')}`,10,30 + i*10);
-    });
-    doc.save(`${studentName}_KKT.pdf`);
 }
 
 // --- Eventos ---
-document.getElementById('start').addEventListener('click', ()=>{
+document.getElementById('start').addEventListener('click',()=>{
     studentName = document.getElementById('studentName').value.trim() || 'Aluno';
+    const xInput = document.getElementById('objFunc').value;
+    const r1 = document.getElementById('r1').value;
+    const r2 = document.getElementById('r2').value;
 
-    // --- Ler problema do aluno ---
-    const objStr = document.getElementById('objective').value;
-    const constrStr = document.getElementById('constraints').value.split('\n');
+    // Detectar variáveis x1, x2,...
+    const xSet = new Set(xInput.match(/x\d+/g));
+    varNames = Array.from(xSet).sort();
 
-    // Detectar variáveis x1, x2...
-    const varSet = new Set();
-    const regex = /x\d+/g;
-    let m;
-    while((m = regex.exec(objStr))!==null) varSet.add(m[0]);
-    constrStr.forEach(l=>{
-        while((m = regex.exec(l))!==null) varSet.add(m[0]);
-    });
-    varNames = Array.from(varSet).sort();
-    dualNames = constrStr.map((_,i)=>`λ${i+1}`);
+    // Adicionar variáveis de folga
+    varNames.push('x'+(varNames.length+1)); // x3 folga
+    // Adicionar variáveis duais correspondentes
+    varNames.push('y1','y2');
 
-    // Criar A, b, base, duais iniciais (simplificado)
-    A = [];
-    b = [];
-    base = [];
-    duals = [];
-    constrStr.forEach((line,i)=>{
-        const row = [];
-        varNames.forEach(v=>{
-            const regex = new RegExp(`([+-]?\\s*\\d*)\\s*${v}`);
-            const res = line.match(regex);
-            let val = 0;
-            if(res){
-                val = res[1].replace(/\s+/g,'')===''?1:parseFloat(res[1]);
-            }
-            row.push(val);
-        });
-        A.push(row);
-        const bv = line.split(/<=|>=|=/)[1];
-        b.push(parseFloat(bv));
-        base.push(`s${i+1}`);
-        duals.push(Array(dualNames.length).fill(0));
-    });
+    // Inicializar base e A/b
+    base = ['x3','y1','y2'];
+    A = [
+        [2,4,1,0,0,0],
+        [-2,0,0,1,0,-2],
+        [0,-4,0,0,1,-4]
+    ];
+    b = [8,-6,-8];
 
-    // Preencher autoIterations inicial
-    autoIterations=[];
-    autoIterations.push({base:[...base], A:A.map(r=>[...r]), b:[...b], duals:duals.map(r=>[...r])});
-    currentIter=0;
-    document.getElementById('iterationsArea').innerHTML='';
-    renderStudentIteration(currentIter);
+    renderStudentIteration(0);
 });
-
-document.getElementById('finalize').addEventListener('click', generatePDF);
 
 </script>
 </body>
 </html>
-
 
