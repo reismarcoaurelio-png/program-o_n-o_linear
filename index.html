@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Simplex KKT - Interativo e Automático</title>
+<title>Simplex KKT - Quadrático Automático</title>
 <style>
 body { font-family: Arial, sans-serif; padding: 20px; background:#f7f9fb; }
 table { border-collapse: collapse; margin-top:10px; }
@@ -15,11 +15,11 @@ button { padding:6px 10px; margin:5px; }
 </style>
 </head>
 <body>
-<h1>Simplex KKT - Quadrático</h1>
+<h1>Simplex KKT - Quadrático Automático teste</h1>
 
 <p>Problema:</p>
 <pre>
-Max z = -x1² +6x1 - 2x2² +8x2
+Max z = -x1² + 6x1 - 2x2² + 8x2
 Sujeito a: 2x1 + 4x2 ≤ 8
 x1 ≥ 0, x2 ≥ 0
 </pre>
@@ -30,97 +30,84 @@ x1 ≥ 0, x2 ≥ 0
 
 <script>
 // --- Variáveis ---
-const varNames = ['x1','x2','x3','y1','y2','y3']; // x3 = folga, y's = complementares
-
-// Base inicial: [x3, y1, y2]
-let base = ['x3','y1','y2'];
-
-// Sistema KKT inicial
+const varNames = ['x1','x2','x3','y1','y2','y3']; // x3=folga, y's=complementares
+let base = ['x3','y1','y2']; // base inicial
 let A = [
-  [2,4,1,0,0,0],    // restrição original + folga
-  [-2,0,0,1,0,-2],  // derivada w.r.t x1
-  [0,-4,0,0,1,-4]   // derivada w.r.t x2
+  [2, 4, 1, 0, 0, 0],   // restrição + folga
+  [-2, 0, 0, 1, 0, -2], // d/dx1
+  [0, -4, 0, 0, 1, -4]  // d/dx2
 ];
-let b = [8,-6,-8];
-
-// Salvar iterações
+let b = [8, -6, -8];
 let iterations = [];
 
 // --- Funções ---
-function saveIteration(pivotRow=-1,pivotCol=-1){
+function saveIteration() {
   iterations.push({
-    base:[...base],
-    A:A.map(r=>[...r]),
-    b:[...b],
-    pivotRow,
-    pivotCol
+    base: [...base],
+    A: A.map(r => [...r]),
+    b: [...b]
   });
 }
 
-// Pivot: atualiza tabela
-function pivot(row,col){
+// Pivot
+function pivot(row, col) {
   const pivotVal = A[row][col];
-  for(let j=0;j<A[row].length;j++) A[row][j] /= pivotVal;
-  b[row] /= pivotVal;
+  for(let j=0;j<A[row].length;j++) A[row][j]/=pivotVal;
+  b[row]/=pivotVal;
   for(let i=0;i<A.length;i++){
     if(i===row) continue;
     const factor = A[i][col];
-    for(let j=0;j<A[i].length;j++) A[i][j] -= factor * A[row][j];
-    b[i] -= factor * b[row];
+    for(let j=0;j<A[i].length;j++) A[i][j] -= factor*A[row][j];
+    b[i] -= factor*b[row];
   }
   base[row] = varNames[col];
-  saveIteration(row,col);
+  saveIteration();
 }
 
-// Variável que entra: mais negativa fora da base
+// Encontra a variável que entra: complementar da mais negativa da base
 function enteringVar(){
-  let minVal = 0, idx = -1;
-  for(let j=0;j<varNames.length;j++){
-    if(!base.includes(varNames[j])){
-      let val = 0;
-      for(let i=0;i<A.length;i++) val += A[i][j];
-      if(val < minVal){ minVal=val; idx=j;}
+  let minVal = 0, row=-1;
+  for(let i=0;i<b.length;i++){
+    if(b[i]<minVal){
+      minVal = b[i];
+      row = i;
     }
   }
-  return idx;
+  if(row===-1) return null;
+  const leavingVar = base[row];
+  const enterVar = leavingVar.startsWith('x') ? 'y'+leavingVar.slice(1) : 'x'+leavingVar.slice(1);
+  const col = varNames.indexOf(enterVar);
+  return {row,col};
 }
 
-// Variável que sai: complementar da que entra
-function leavingVar(enterCol){
-  const enterVar = varNames[enterCol];
-  for(let i=0;i<base.length;i++){
-    const bv = base[i];
-    const comp = bv.startsWith('x') ? 'y'+bv.slice(1) : 'x'+bv.slice(1);
-    if(comp === enterVar) return i;
-  }
-  return -1;
+// Verifica se ótimo
+function isOptimal(){
+  return b.every(v=>v>=0);
 }
 
-// Iterar até ótimo
+// Itera automaticamente
 function solveAutomatic(){
   // reset
   base = ['x3','y1','y2'];
   A = [
-    [2,4,1,0,0,0],
-    [-2,0,0,1,0,-2],
-    [0,-4,0,0,1,-4]
+    [2, 4, 1, 0, 0, 0],
+    [-2, 0, 0, 1, 0, -2],
+    [0, -4, 0, 0, 1, -4]
   ];
   b = [8,-6,-8];
   iterations=[];
   saveIteration();
-  
-  while(true){
-    const enter = enteringVar();
-    if(enter === -1) break; // ótimo
-    const leave = leavingVar(enter);
-    if(leave === -1) break; // não encontrou saída
-    pivot(leave,enter);
+
+  while(!isOptimal()){
+    const pivotPos = enteringVar();
+    if(!pivotPos) break;
+    pivot(pivotPos.row, pivotPos.col);
   }
-  
+
   renderIterations();
 }
 
-// Renderizar tabela
+// Renderiza as iterações
 function renderIterations(){
   const area = document.getElementById('iterations');
   area.innerHTML='';
@@ -134,8 +121,8 @@ function renderIterations(){
     for(let r=0;r<it.base.length;r++){
       const tr = document.createElement('tr');
       tr.innerHTML=`<td>${it.base[r]}</td>`+
-        it.A[r].map(v=>`<td>${v.toFixed(4)}</td>`).join('')+
-        `<td>${it.b[r].toFixed(4)}</td>`;
+        it.A[r].map(v=>`<td>${v}</td>`).join('')+
+        `<td>${it.b[r]}</td>`;
       tbl.appendChild(tr);
     }
     div.appendChild(tbl);
@@ -150,3 +137,4 @@ document.getElementById('autoSolve').addEventListener('click', solveAutomatic);
 </script>
 </body>
 </html>
+
