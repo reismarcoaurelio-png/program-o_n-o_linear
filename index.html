@@ -36,35 +36,24 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-
-// --- Problema de exemplo QP KKT ---
+// --- Problema fixo ---
 let problem = null;
-let nIterations = 3; // número de iterações
+let nIterations = 1; // apenas um tableau neste exemplo
 
 function buildProblem(){
   const studentName = document.getElementById('studentName').value.trim();
   if(!studentName){ alert('Digite o nome do aluno!'); return; }
 
+  // Problema exemplo
   problem = {
     vars:['x1','x2','x3','y1','y2','y3'],
-    steps:[
-      // cada passo contém: base, coeficientes, b
-      {
-        base:['x3','y1','y2'],
-        A:[[2,4,1,0,0,0],[ -2,0,0,1,0,0],[0,-4,0,0,1,0]],
-        b:[0,6,8]
-      },
-      {
-        base:['x1','y1','y2'],
-        A:[[1,0,0,1,0,0],[0,4,1,0,1,0],[0,-4,0,0,1,0]],
-        b:[2,6,8]
-      },
-      {
-        base:['x1','x2','x3'],
-        A:[[1,0,0,1,0,0],[0,1,0,0,1,0],[0,0,1,0,0,1]],
-        b:[2,2,3]
-      }
-    ]
+    baseVars:['x3','y1','y2'], // variáveis básicas deste tableau
+    A:[
+      [2,4,1,0,0,0],
+      [-2,0,0,1,0,-2],
+      [0,-4,0,0,1,-4]
+    ],
+    b:[0,-6,-8]
   };
 
   document.getElementById('problemArea').innerHTML = `
@@ -72,118 +61,112 @@ function buildProblem(){
     Max z = -x1² +6x1 -2x2² +8x2<br>
     Sujeito a: 2x1+4x2 ≤ 0, x1≥0, x2≥0<br>
     Variável de folga x3 = - (2x1+4x2) ≥0<br>
-    Preencha manualmente cada tableau do Simplex aplicando KKT.<br>
-    Primeira coluna: variáveis básicas.<br>
-    Colunas seguintes: coeficientes do sistema linear KKT.<br>
-    Última coluna "b": valor das variáveis básicas.<br>
-    Clique "Verificar Iteração" para validar cada passo.`;
+    Preencha manualmente o tableau KKT:<br>
+    - Primeira coluna: variáveis básicas<br>
+    - Colunas seguintes: coeficientes do sistema KKT<br>
+    - Última coluna "b": valor das variáveis básicas<br>
+    Clique "Verificar Iteração" para validar.`;
 
-  renderIterations();
+  renderTableau();
 }
 
-// --- Renderizar as tabelas para cada iteração ---
-function renderIterations(){
+function renderTableau(){
   const area = document.getElementById('iterationsArea');
   area.innerHTML = '';
-  for(let k=0;k<nIterations;k++){
-    const div = document.createElement('div');
-    div.innerHTML = `<strong>Iteração ${k+1}:</strong>`;
-    const tbl = document.createElement('table');
+  const div = document.createElement('div');
+  div.innerHTML = `<strong>Tableau KKT:</strong>`;
+  const tbl = document.createElement('table');
 
-    // cabeçalho
-    const thead = document.createElement('thead');
-    const htr = document.createElement('tr');
-    htr.innerHTML = '<th>Base</th>' + problem.vars.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
-    thead.appendChild(htr);
-    tbl.appendChild(thead);
+  // Cabeçalho
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  htr.innerHTML = '<th>Base</th>' + problem.vars.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
+  thead.appendChild(htr);
+  tbl.appendChild(thead);
 
-    // corpo
-    const tbody = document.createElement('tbody');
-    for(let i=0;i<problem.vars.length;i++){
-      const tr = document.createElement('tr');
-      const tdBase = document.createElement('td');
-      const inputBase = document.createElement('input');
-      inputBase.type='text'; inputBase.className='basicVar';
-      inputBase.dataset.iter=k;
-      inputBase.dataset.row=i;
-      tdBase.appendChild(inputBase);
-      tr.appendChild(tdBase);
+  // Corpo
+  const tbody = document.createElement('tbody');
+  for(let i=0;i<problem.baseVars.length;i++){
+    const tr = document.createElement('tr');
+    // Base
+    const tdBase = document.createElement('td');
+    const inputBase = document.createElement('input');
+    inputBase.type='text'; inputBase.className='basicVar';
+    inputBase.dataset.row=i;
+    tdBase.appendChild(inputBase);
+    tr.appendChild(tdBase);
 
-      for(let j=0;j<problem.vars.length;j++){
-        const td = document.createElement('td');
-        const input = document.createElement('input');
-        input.type='number';
-        input.style.width='60px';
-        input.dataset.iter=k;
-        input.dataset.row=i;
-        input.dataset.col=j;
-        td.appendChild(input);
-        tr.appendChild(td);
-      }
-
-      const tdB = document.createElement('td');
-      const inputB = document.createElement('input');
-      inputB.type='number';
-      inputB.style.width='60px';
-      inputB.dataset.iter=k;
-      inputB.dataset.row=i;
-      inputB.dataset.b=true;
-      tdB.appendChild(inputB);
-      tr.appendChild(tdB);
-
-      tbody.appendChild(tr);
+    // Coeficientes
+    for(let j=0;j<problem.vars.length;j++){
+      const td = document.createElement('td');
+      const input = document.createElement('input');
+      input.type='number'; input.style.width='60px';
+      input.dataset.row=i;
+      input.dataset.col=j;
+      td.appendChild(input);
+      tr.appendChild(td);
     }
-    tbl.appendChild(tbody);
-    div.appendChild(tbl);
 
-    const btn = document.createElement('button');
-    btn.innerText='Verificar Iteração';
-    btn.addEventListener('click',()=>checkIteration(k));
-    div.appendChild(btn);
+    // b
+    const tdB = document.createElement('td');
+    const inputB = document.createElement('input');
+    inputB.type='number'; inputB.style.width='60px';
+    inputB.dataset.row=i;
+    inputB.dataset.b=true;
+    tdB.appendChild(inputB);
+    tr.appendChild(tdB);
 
-    area.appendChild(div);
+    tbody.appendChild(tr);
   }
+  tbl.appendChild(tbody);
+  div.appendChild(tbl);
+
+  const btn = document.createElement('button');
+  btn.innerText='Verificar Tableau';
+  btn.addEventListener('click',checkTableau);
+  div.appendChild(btn);
 
   const finalBtn = document.createElement('button');
   finalBtn.innerText='Finalizar e Gerar Relatório';
   finalBtn.addEventListener('click',finalCheck);
-  area.appendChild(finalBtn);
+  div.appendChild(finalBtn);
+
+  area.appendChild(div);
 }
 
-// --- Verificação de uma iteração ---
-function checkIteration(k){
-  const step = problem.steps[k];
+// --- Verificação do tableau ---
+function checkTableau(){
   let correct=0;
   let total=0;
 
   // Base
-  const inputsBase = document.querySelectorAll(`#iterationsArea input.basicVar[data-iter='${k}']`);
+  const inputsBase = document.querySelectorAll('#iterationsArea input.basicVar');
   inputsBase.forEach((inp,i)=>{
-    if(step.base[i] && inp.value.trim()===step.base[i]) {inp.parentElement.className='correct'; correct++;} 
-    else {inp.parentElement.className='wrong';}
     total++;
+    if(inp.value.trim()===problem.baseVars[i]){inp.parentElement.className='correct'; correct++;} 
+    else inp.parentElement.className='wrong';
   });
 
   // Coeficientes
-  for(let i=0;i<problem.vars.length;i++){
+  for(let i=0;i<problem.baseVars.length;i++){
     for(let j=0;j<problem.vars.length;j++){
       total++;
-      const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-col='${j}']`);
-      if(Math.abs(+inp.value - step.A[i][j])<1e-3){ inp.parentElement.className='correct'; correct++; }
+      const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-col='${j}']`);
+      if(Math.abs(+inp.value - problem.A[i][j])<1e-3){inp.parentElement.className='correct'; correct++;} 
       else inp.parentElement.className='wrong';
     }
   }
 
-  // coluna b
-  for(let i=0;i<problem.vars.length;i++){
+  // b
+  for(let i=0;i<problem.baseVars.length;i++){
     total++;
-    const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-b]`);
-    if(Math.abs(+inp.value - step.b[i])<1e-3){ inp.parentElement.className='correct'; correct++; }
+    const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-b]`);
+    if(Math.abs(+inp.value - problem.b[i])<1e-3){inp.parentElement.className='correct'; correct++;} 
     else inp.parentElement.className='wrong';
   }
 
   const fb = document.getElementById('feedback');
-  fb.innerText=`Iteração ${k+1}: ${correct}/${total} valores corretos`;
+  fb.innerText=`Tableau: ${correct}/${total} valores corretos`;
   fb.className='status '+(correct===total?'ok':'error');
 }
 
@@ -193,23 +176,22 @@ function finalCheck(){
   let correctTotal=0;
   let totalCells=0;
 
-  for(let k=0;k<nIterations;k++){
-    const step = problem.steps[k];
-    // Base
-    const inputsBase = document.querySelectorAll(`#iterationsArea input.basicVar[data-iter='${k}']`);
-    inputsBase.forEach((inp,i)=>{ if(inp.value.trim()===step.base[i]) correctTotal++; totalCells++; });
-    // Coeficientes
-    for(let i=0;i<problem.vars.length;i++){
-      for(let j=0;j<problem.vars.length;j++){ totalCells++; 
-        const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-col='${j}']`);
-        if(Math.abs(+inp.value - step.A[i][j])<1e-3) correctTotal++;
-      }
+  // Base
+  const inputsBase = document.querySelectorAll('#iterationsArea input.basicVar');
+  inputsBase.forEach((inp,i)=>{ totalCells++; if(inp.value.trim()===problem.baseVars[i]) correctTotal++; });
+
+  // Coeficientes
+  for(let i=0;i<problem.baseVars.length;i++){
+    for(let j=0;j<problem.vars.length;j++){ totalCells++;
+      const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-col='${j}']`);
+      if(Math.abs(+inp.value - problem.A[i][j])<1e-3) correctTotal++;
     }
-    // b
-    for(let i=0;i<problem.vars.length;i++){ totalCells++;
-      const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-b]`);
-      if(Math.abs(+inp.value - step.b[i])<1e-3) correctTotal++;
-    }
+  }
+
+  // b
+  for(let i=0;i<problem.baseVars.length;i++){ totalCells++;
+    const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-b]`);
+    if(Math.abs(+inp.value - problem.b[i])<1e-3) correctTotal++;
   }
 
   const score = Math.round(correctTotal/totalCells*100);
@@ -226,16 +208,10 @@ function finalCheck(){
   doc.text(`Aluno: ${studentName}`,20,35);
   doc.text(`Nota Final: ${score}/100`,20,45);
   doc.text(`Valores corretos: ${correctTotal}/${totalCells}`,20,55);
-
-  let y=65;
-  for(let k=0;k<nIterations;k++){
-    doc.text(`Iteração ${k+1}:`,20,y); y+=7;
-    const step = problem.steps[k];
-    doc.text(`Base: ${step.base.join(', ')}`,20,y); y+=7;
-    doc.text(`A: [${step.A.map(row=>row.join(', ')).join(' | ')}]`,20,y); y+=7;
-    doc.text(`b: [${step.b.join(', ')}]`,20,y); y+=10;
-  }
-
+  doc.text('Tableau KKT:',20,65);
+  doc.text(`Base: ${problem.baseVars.join(', ')}`,20,75);
+  doc.text(`A: [${problem.A.map(row=>row.join(', ')).join(' | ')}]`,20,85);
+  doc.text(`b: [${problem.b.join(', ')}]`,20,95);
   doc.save(`Relatorio_${studentName.replace(/\s+/g,'_')}.pdf`);
 }
 
