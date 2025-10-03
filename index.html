@@ -9,10 +9,10 @@ body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1{font-size:22px;margin-bottom:12px}
 .input-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
 input[type="number"], input[type="text"]{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;width:80px;text-align:right}
-input[type="text"]{width:200px;text-align:left;text-align:start}
+input[type="text"].basicVar{width:60px;text-align:center}
 button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:#2563eb;color:white;margin-top:5px}
 table{border-collapse:collapse;margin-top:12px}
-th,td{border:1px solid #999;padding:6px;text-align:right}
+th,td{border:1px solid #999;padding:6px;text-align:center}
 td.correct{background:#dcfce7;color:#065f46}
 td.wrong{background:#fee2e2;color:#9b1c1c}
 .status{padding:8px;border-radius:6px;margin-top:10px}
@@ -36,38 +36,52 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// --- Problema fixo para demonstração ---
+
+// --- Problema de exemplo QP KKT ---
 let problem = null;
-let optimalSteps = null; // solução passo a passo
-let nIterations = 3;
+let nIterations = 3; // número de iterações
 
 function buildProblem(){
   const studentName = document.getElementById('studentName').value.trim();
-  if(!studentName){ alert('Digite seu nome!'); return; }
+  if(!studentName){ alert('Digite o nome do aluno!'); return; }
 
   problem = {
-    xStar:[0,2,3], // solução ótima x1,x2,x3(folga)
-    yStar:[6,8,1], // multiplicadores
-    tableauSteps:[
-      {x:[0,0,0],y:[0,0,0]},
-      {x:[0,0,0],y:[6,0,0]},
-      {x:[0,2,3],y:[6,8,1]}
+    vars:['x1','x2','x3','y1','y2','y3'],
+    steps:[
+      // cada passo contém: base, coeficientes, b
+      {
+        base:['x3','y1','y2'],
+        A:[[2,4,1,0,0,0],[ -2,0,0,1,0,0],[0,-4,0,0,1,0]],
+        b:[0,6,8]
+      },
+      {
+        base:['x1','y1','y2'],
+        A:[[1,0,0,1,0,0],[0,4,1,0,1,0],[0,-4,0,0,1,0]],
+        b:[2,6,8]
+      },
+      {
+        base:['x1','x2','x3'],
+        A:[[1,0,0,1,0,0],[0,1,0,0,1,0],[0,0,1,0,0,1]],
+        b:[2,2,3]
+      }
     ]
   };
 
   document.getElementById('problemArea').innerHTML = `
-  <strong>Problema:</strong><br>
-  Max z = -x1² +6x1 -2x2² +8x2<br>
-  Sujeito a: 2x1+4x2 ≤ 0, x1≥0, x2≥0<br>
-  Variável de folga x3 = - (2x1+4x2) ≥0<br>
-  Preencha manualmente cada tableau do Simplex aplicando KKT.<br>
-  Cada iteração deve ter uma variável complementar na base e a outra fora da base.<br>
-  Clique "Verificar Iteração" para validar cada passo.`;
+    <strong>Problema:</strong><br>
+    Max z = -x1² +6x1 -2x2² +8x2<br>
+    Sujeito a: 2x1+4x2 ≤ 0, x1≥0, x2≥0<br>
+    Variável de folga x3 = - (2x1+4x2) ≥0<br>
+    Preencha manualmente cada tableau do Simplex aplicando KKT.<br>
+    Primeira coluna: variáveis básicas.<br>
+    Colunas seguintes: coeficientes do sistema linear KKT.<br>
+    Última coluna "b": valor das variáveis básicas.<br>
+    Clique "Verificar Iteração" para validar cada passo.`;
 
   renderIterations();
 }
 
-// --- Renderizar inputs para cada iteração ---
+// --- Renderizar as tabelas para cada iteração ---
 function renderIterations(){
   const area = document.getElementById('iterationsArea');
   area.innerHTML = '';
@@ -75,30 +89,58 @@ function renderIterations(){
     const div = document.createElement('div');
     div.innerHTML = `<strong>Iteração ${k+1}:</strong>`;
     const tbl = document.createElement('table');
+
+    // cabeçalho
     const thead = document.createElement('thead');
     const htr = document.createElement('tr');
-    htr.innerHTML = '<th>Variável</th><th>x1</th><th>x2</th><th>x3(folga)</th><th>y1</th><th>y2</th><th>y3</th>';
-    thead.appendChild(htr); tbl.appendChild(thead);
+    htr.innerHTML = '<th>Base</th>' + problem.vars.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
+    thead.appendChild(htr);
+    tbl.appendChild(thead);
+
+    // corpo
     const tbody = document.createElement('tbody');
-    const tr = document.createElement('tr');
-    const tdLabel = document.createElement('td'); tdLabel.innerText='Valores'; tr.appendChild(tdLabel);
-    for(let i=0;i<6;i++){
-      const td = document.createElement('td');
-      const input = document.createElement('input');
-      input.type='number';
-      input.style.width='60px';
-      input.dataset.iter=k;
-      input.dataset.col=i;
-      td.appendChild(input);
-      tr.appendChild(td);
+    for(let i=0;i<problem.vars.length;i++){
+      const tr = document.createElement('tr');
+      const tdBase = document.createElement('td');
+      const inputBase = document.createElement('input');
+      inputBase.type='text'; inputBase.className='basicVar';
+      inputBase.dataset.iter=k;
+      inputBase.dataset.row=i;
+      tdBase.appendChild(inputBase);
+      tr.appendChild(tdBase);
+
+      for(let j=0;j<problem.vars.length;j++){
+        const td = document.createElement('td');
+        const input = document.createElement('input');
+        input.type='number';
+        input.style.width='60px';
+        input.dataset.iter=k;
+        input.dataset.row=i;
+        input.dataset.col=j;
+        td.appendChild(input);
+        tr.appendChild(td);
+      }
+
+      const tdB = document.createElement('td');
+      const inputB = document.createElement('input');
+      inputB.type='number';
+      inputB.style.width='60px';
+      inputB.dataset.iter=k;
+      inputB.dataset.row=i;
+      inputB.dataset.b=true;
+      tdB.appendChild(inputB);
+      tr.appendChild(tdB);
+
+      tbody.appendChild(tr);
     }
-    tbody.appendChild(tr);
     tbl.appendChild(tbody);
     div.appendChild(tbl);
+
     const btn = document.createElement('button');
     btn.innerText='Verificar Iteração';
     btn.addEventListener('click',()=>checkIteration(k));
     div.appendChild(btn);
+
     area.appendChild(div);
   }
 
@@ -108,40 +150,68 @@ function renderIterations(){
   area.appendChild(finalBtn);
 }
 
-// --- Verifica uma iteração ---
+// --- Verificação de uma iteração ---
 function checkIteration(k){
-  const step = problem.tableauSteps[k];
+  const step = problem.steps[k];
   let correct=0;
-  let total=6;
-  const inputs = document.querySelectorAll(`#iterationsArea input[data-iter='${k}']`);
-  inputs.forEach((inp,i)=>{
-    const val = +inp.value;
-    const expected = step.x[i]!==undefined?step.x[i]:step.y[i-step.x.length];
-    if(Math.abs(val-expected)<1e-3){
-      inp.parentElement.className='correct';
-      correct++;
-    } else inp.parentElement.className='wrong';
+  let total=0;
+
+  // Base
+  const inputsBase = document.querySelectorAll(`#iterationsArea input.basicVar[data-iter='${k}']`);
+  inputsBase.forEach((inp,i)=>{
+    if(step.base[i] && inp.value.trim()===step.base[i]) {inp.parentElement.className='correct'; correct++;} 
+    else {inp.parentElement.className='wrong';}
+    total++;
   });
+
+  // Coeficientes
+  for(let i=0;i<problem.vars.length;i++){
+    for(let j=0;j<problem.vars.length;j++){
+      total++;
+      const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-col='${j}']`);
+      if(Math.abs(+inp.value - step.A[i][j])<1e-3){ inp.parentElement.className='correct'; correct++; }
+      else inp.parentElement.className='wrong';
+    }
+  }
+
+  // coluna b
+  for(let i=0;i<problem.vars.length;i++){
+    total++;
+    const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-b]`);
+    if(Math.abs(+inp.value - step.b[i])<1e-3){ inp.parentElement.className='correct'; correct++; }
+    else inp.parentElement.className='wrong';
+  }
+
   const fb = document.getElementById('feedback');
   fb.innerText=`Iteração ${k+1}: ${correct}/${total} valores corretos`;
   fb.className='status '+(correct===total?'ok':'error');
 }
 
-// --- Checa todas as iterações, calcula nota e gera PDF ---
+// --- Verificação final e PDF ---
 function finalCheck(){
   const studentName = document.getElementById('studentName').value.trim();
   let correctTotal=0;
   let totalCells=0;
+
   for(let k=0;k<nIterations;k++){
-    const step = problem.tableauSteps[k];
-    const inputs = document.querySelectorAll(`#iterationsArea input[data-iter='${k}']`);
-    inputs.forEach((inp,i)=>{
-      const val = +inp.value;
-      const expected = step.x[i]!==undefined?step.x[i]:step.y[i-step.x.length];
-      if(Math.abs(val-expected)<1e-3) correctTotal++;
-      totalCells++;
-    });
+    const step = problem.steps[k];
+    // Base
+    const inputsBase = document.querySelectorAll(`#iterationsArea input.basicVar[data-iter='${k}']`);
+    inputsBase.forEach((inp,i)=>{ if(inp.value.trim()===step.base[i]) correctTotal++; totalCells++; });
+    // Coeficientes
+    for(let i=0;i<problem.vars.length;i++){
+      for(let j=0;j<problem.vars.length;j++){ totalCells++; 
+        const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-col='${j}']`);
+        if(Math.abs(+inp.value - step.A[i][j])<1e-3) correctTotal++;
+      }
+    }
+    // b
+    for(let i=0;i<problem.vars.length;i++){ totalCells++;
+      const inp = document.querySelector(`#iterationsArea input[data-iter='${k}'][data-row='${i}'][data-b]`);
+      if(Math.abs(+inp.value - step.b[i])<1e-3) correctTotal++;
+    }
   }
+
   const score = Math.round(correctTotal/totalCells*100);
   const fb = document.getElementById('feedback');
   fb.innerText=`✅ ${studentName} - Nota Final: ${score}/100 (${correctTotal}/${totalCells} valores corretos)`;
@@ -156,16 +226,22 @@ function finalCheck(){
   doc.text(`Aluno: ${studentName}`,20,35);
   doc.text(`Nota Final: ${score}/100`,20,45);
   doc.text(`Valores corretos: ${correctTotal}/${totalCells}`,20,55);
+
   let y=65;
   for(let k=0;k<nIterations;k++){
     doc.text(`Iteração ${k+1}:`,20,y); y+=7;
-    const step = problem.tableauSteps[k];
-    doc.text(`x=[${step.x.join(', ')}], y=[${step.y.join(', ')}]`,20,y); y+=10;
+    const step = problem.steps[k];
+    doc.text(`Base: ${step.base.join(', ')}`,20,y); y+=7;
+    doc.text(`A: [${step.A.map(row=>row.join(', ')).join(' | ')}]`,20,y); y+=7;
+    doc.text(`b: [${step.b.join(', ')}]`,20,y); y+=10;
   }
+
   doc.save(`Relatorio_${studentName.replace(/\s+/g,'_')}.pdf`);
 }
 
 document.getElementById('build').addEventListener('click',buildProblem);
+
 </script>
 </body>
 </html>
+
