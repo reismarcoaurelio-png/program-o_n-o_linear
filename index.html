@@ -46,6 +46,7 @@ let A = [
 ];
 let b = [8,-6,-8];
 let studentName = "";
+let scores = [];
 
 // --- Funções ---
 function saveAutoIteration(){
@@ -87,9 +88,8 @@ function enteringVar(){
 // Ótimo
 function isOptimal(){ return b.every(v=>v>=0); }
 
-// Preencher autoIterations
+// Resolver automaticamente
 function solveAutomatic(){
-  // reset
   base = ['x3','y1','y2'];
   A = [
     [2,4,1,0,0,0],
@@ -106,7 +106,39 @@ function solveAutomatic(){
   }
 }
 
-// Renderizar uma iteração para aluno preencher
+// Parse valor/fração
+function parseValue(val){
+  val = val.trim();
+  if(val.includes('/')){
+    const frac = val.split('/');
+    const num = parseFloat(frac[0].trim());
+    const den = parseFloat(frac[1].trim());
+    return num/den;
+  } else return parseFloat(val);
+}
+
+// Verificar iteração
+function checkIteration(iterIdx){
+  const it = autoIterations[iterIdx];
+  let correctCells = [];
+  let totalCells = it.base.length*(varNames.length+2); // +base +b
+  let correctCount = 0;
+  for(let r=0;r<it.base.length;r++){
+    const baseVal = document.getElementById(`base_${r}`).value.trim();
+    if(baseVal === it.base[r]) correctCount++; else correctCells.push(`Base linha ${r+1}`);
+    for(let j=0;j<varNames.length;j++){
+      const val = parseValue(document.getElementById(`cell_${r}_${j}`).value);
+      if(Math.abs(val - it.A[r][j])<1e-4) correctCount++; else correctCells.push(`${varNames[j]} linha ${r+1}`);
+    }
+    const bVal = parseValue(document.getElementById(`b_${r}`).value);
+    if(Math.abs(bVal - it.b[r])<1e-4) correctCount++; else correctCells.push(`b linha ${r+1}`);
+  }
+  const score = Math.round(100*correctCount/totalCells);
+  scores[iterIdx] = score;
+  return {score, correctCells};
+}
+
+// Renderizar iteração para aluno preencher
 function renderStudentIteration(iterIdx){
   const area = document.getElementById('iterationsArea');
   area.innerHTML=`<h3>Iteração ${iterIdx+1}</h3>`;
@@ -124,24 +156,24 @@ function renderStudentIteration(iterIdx){
   }
   area.appendChild(tbl);
 
-  // Botão para verificar a iteração
+  // Botão verificar
   const btnCheck = document.createElement('button');
-  btnCheck.innerText = 'Verificar Iteração';
+  btnCheck.innerText='Verificar Iteração';
   btnCheck.onclick = ()=>{
-    const correct = checkIteration(iterIdx);
+    const res = checkIteration(iterIdx);
     const fb = document.getElementById('feedback');
-    if(correct){
-      fb.innerText='✅ Iteração correta! Clique em "Próxima Iteração" para continuar.';
+    if(res.correctCells.length===0){
+      fb.innerText=`✅ Iteração correta! Pontuação: ${res.score}/100`;
       fb.className='status ok';
       document.getElementById('nextIterBtn').style.display='inline-block';
     } else {
-      fb.innerText='❌ Iteração incorreta, revise os valores.';
+      fb.innerText=`❌ Pontuação: ${res.score}/100. Erros: ${res.correctCells.join(', ')}`;
       fb.className='status error';
     }
   };
   area.appendChild(btnCheck);
 
-  // Botão para próxima iteração
+  // Próxima iteração
   const nextBtn = document.createElement('button');
   nextBtn.id='nextIterBtn';
   nextBtn.innerText='Próxima Iteração';
@@ -154,35 +186,12 @@ function renderStudentIteration(iterIdx){
     } else {
       document.getElementById('finalize').style.display='inline-block';
       const fb = document.getElementById('feedback');
-      fb.innerText='✅ Todas as iterações preenchidas. Pode gerar o relatório.';
+      const totalScore = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+      fb.innerText=`✅ Todas as iterações preenchidas. Nota final: ${totalScore}/100.`;
       fb.className='status ok';
     }
   };
   area.appendChild(nextBtn);
-}
-
-// Verificar iteração do aluno
-function checkIteration(iterIdx){
-  let correct = true;
-  const it = autoIterations[iterIdx];
-  for(let r=0;r<it.base.length;r++){
-    if(document.getElementById(`base_${r}`).value.trim()!==it.base[r]) correct=false;
-    for(let j=0;j<varNames.length;j++){
-      let val = document.getElementById(`cell_${r}_${j}`).value.trim();
-      if(val.includes('/')){ // fração
-        const frac = val.split('/');
-        val = parseFloat(frac[0])/parseFloat(frac[1]);
-      } else val = parseFloat(val);
-      if(Math.abs(val - it.A[r][j])>1e-4) correct=false;
-    }
-    let bv = document.getElementById(`b_${r}`).value.trim();
-    if(bv.includes('/')){
-      const frac = bv.split('/');
-      bv = parseFloat(frac[0])/parseFloat(frac[1]);
-    } else bv = parseFloat(bv);
-    if(Math.abs(bv - it.b[r])>1e-4) correct=false;
-  }
-  return correct;
 }
 
 // Gerar PDF
@@ -190,23 +199,8 @@ function generatePDF(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   doc.text(`Relatório do Aluno: ${studentName}`,10,10);
-  doc.text('Problema: Max z = -x1² +6x1 -2x2² +8x2',10,20);
+  const totalScore = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+  doc.text(`Nota Final: ${totalScore}/100`,10,20);
+  doc.text('Problema: Max z = -x1² +6x1 -2x2² +8x2',10,30);
   autoIterations.forEach((it,i)=>{
-    doc.text(`Iteração ${i+1}: Base = ${it.base.join(', ')}`,10,30 + i*10);
-  });
-  doc.save(`${studentName}_KKT.pdf`);
-}
-
-// --- Eventos ---
-document.getElementById('start').addEventListener('click', ()=>{
-  studentName = document.getElementById('studentName').value.trim() || 'Aluno';
-  solveAutomatic();
-  currentIter=0;
-  document.getElementById('iterationsArea').innerHTML='';
-  renderStudentIteration(currentIter);
-});
-
-document.getElementById('finalize').addEventListener('click', generatePDF);
-</script>
-</body>
-</html>
+    doc.text(`Iteração ${i+1} Base: ${
