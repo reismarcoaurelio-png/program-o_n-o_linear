@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Simplex KKT Interativo Corrigido</title>
+<title>Simplex KKT Interativo Visual</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1,h2{margin-bottom:12px}
@@ -15,6 +15,8 @@ table{border-collapse:collapse;margin-top:12px}
 th,td{border:1px solid #999;padding:6px;text-align:center}
 td.correct{background:#dcfce7;color:#065f46}
 td.wrong{background:#fee2e2;color:#9b1c1c}
+td.pivotEnter{background:#ffecb3}
+td.pivotLeave{background:#ffcdd2}
 .status{padding:8px;border-radius:6px;margin-top:10px}
 .ok{background:#dcfce7;color:#065f46}
 .error{background:#fee2e2;color:#9b1c1c}
@@ -22,7 +24,7 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 </head>
 <body>
 
-<h1>Simplex KKT - Passo a Passo Interativo v </h1>
+<h1>Simplex KKT - Passo a Passo Visual</h1>
 
 <h2>Problema:</h2>
 <p id="problemText">
@@ -44,7 +46,7 @@ x1 ≥ 0, x2 ≥ 0
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// --- Funções utilitárias ---
+// --- Utilitários ---
 function parseInput(val){
   val = val.trim();
   if(!val) return NaN;
@@ -63,10 +65,10 @@ function isCorrect(valAluno, valCorreto){
 const varNames=['x1','x2','x3','y1','y2','y3'];
 let studentName='', tableaux=[], currentIter=0, scores=[];
 
-// --- Simplex KKT com pivot real ---
+// --- Simplex KKT real ---
 class SimplexKKT{
   constructor(){
-    this.base=['x3','y1','y2']; // Base inicial
+    this.base=['x3','y1','y2'];
     this.A=[
       [2,4,1,0,0,0],
       [-2,0,0,1,0,-2],
@@ -74,16 +76,21 @@ class SimplexKKT{
     ];
     this.b=[8,-6,-8];
     this.iterations=[];
+    this.pivotRow=-1;
+    this.pivotCol=-1;
     this.saveIteration();
   }
   saveIteration(){
     this.iterations.push({
       baseVars:[...this.base],
       A:this.A.map(r=>[...r]),
-      b:[...this.b]
+      b:[...this.b],
+      pivotRow:this.pivotRow,
+      pivotCol:this.pivotCol
     });
   }
   pivot(row,col){
+    this.pivotRow=row; this.pivotCol=col;
     const pivotVal=this.A[row][col];
     for(let j=0;j<this.A[row].length;j++) this.A[row][j]/=pivotVal;
     this.b[row]/=pivotVal;
@@ -157,17 +164,22 @@ function renderIteration(idx){
     const tdBase=document.createElement('td');
     const inputBase=document.createElement('input');
     inputBase.type='text'; inputBase.className='basicVar'; inputBase.dataset.row=i;
-    tdBase.appendChild(inputBase); tr.appendChild(tdBase);
+    tdBase.appendChild(inputBase);
+    if(i===iter.pivotRow) tdBase.className='pivotLeave';
+    tr.appendChild(tdBase);
     for(let j=0;j<varNames.length;j++){
       const td=document.createElement('td');
       const input=document.createElement('input');
       input.type='text'; input.dataset.row=i; input.dataset.col=j;
-      td.appendChild(input); tr.appendChild(td);
+      if(i===iter.pivotRow && j===iter.pivotCol) td.className='pivotEnter';
+      td.appendChild(input);
+      tr.appendChild(td);
     }
     const tdB=document.createElement('td');
     const inputB=document.createElement('input');
     inputB.type='text'; inputB.dataset.row=i; inputB.dataset.b=true;
-    tdB.appendChild(inputB); tr.appendChild(tdB);
+    tdB.appendChild(inputB);
+    tr.appendChild(tdB);
     tbody.appendChild(tr);
   }
   tbl.appendChild(tbody);
@@ -227,4 +239,3 @@ document.getElementById('startBtn').addEventListener('click',start);
 
 </body>
 </html>
-
