@@ -2,13 +2,13 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Simplex Quadrático Interativo - Personalizado</title>
+<title>Simplex Quadrático Interativo com Variáveis Duais</title>
 <style>
 body { font-family: Arial, sans-serif; padding:20px; background:#f7f9fb; }
 table { border-collapse: collapse; margin-top:10px; }
 th, td { border:1px solid #999; padding:5px; text-align:center; }
 th { background:#eee; }
-input { width:80px; text-align:center; }
+input { width:70px; text-align:center; }
 button { padding:6px 10px; margin:5px; }
 .status { margin-top:10px; padding:8px; border-radius:5px; }
 .ok { background:#dcfce7; color:#065f46; }
@@ -17,14 +17,14 @@ button { padding:6px 10px; margin:5px; }
 </head>
 <body>
 
-<h1>Simplex Quadrático Interativo - Personalizado</h1>
+<h1>Simplex Quadrático Interativo - Com Variáveis Duais</h1>
 
 <label>Nome do aluno: <input id="studentName" type="text"></label>
 
-<h3>Defina a função objetivo (Ex: -x1^2 + 6*x1 - 2*x2^2 + 8*x2)</h3>
+<h3>Função Objetivo (Ex: -x1^2 +6*x1 -2*x2^2 +8*x2)</h3>
 <input type="text" id="objective" style="width:300px;" value="-x1^2 +6*x1 -2*x2^2 +8*x2">
 
-<h3>Defina as restrições (uma por linha, Ex: 2x1 + 4x2 <= 8)</h3>
+<h3>Restrições (uma por linha, Ex: 2*x1 + 4*x2 <= 8)</h3>
 <textarea id="constraints" rows="4" cols="50">2*x1 + 4*x2 <= 8
 x1 >= 0
 x2 >= 0</textarea>
@@ -43,12 +43,12 @@ let studentName = "";
 let objectiveFunc = "";
 let constraintsArr = [];
 let varNames = [];
+let dualNames = [];
 let autoIterations = [];
 let currentIter = 0;
 
 // --- Parser simples da função objetivo ---
 function parseObjective(objText){
-  // Detecta todas as variáveis x1, x2, ... automaticamente
   const vars = [...new Set((objText.match(/x\d+/g) || []))];
   varNames = vars;
   return function(values){
@@ -61,23 +61,39 @@ function parseObjective(objText){
 // --- Parser simples das restrições ---
 function parseConstraints(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
-  const cons = lines.map(line=>{
+  const cons = lines.map((line,i)=>{
     let type;
     if(line.includes("<=")) type = "<=";
     else if(line.includes(">=")) type = ">=";
     else type = "=";
-    return {expr:line.replaceAll("<=","").replaceAll(">=","").replaceAll("=",""), type};
+    return {expr:line.replace(/<=|>=|=/g,"").trim(), type, name:"λ"+(i+1)};
   });
+  dualNames = cons.map(c=>c.name);
   return cons;
 }
 
-// --- Simulação de iterações Simplex (didático) ---
+// --- Simulação de iterações Simplex com variáveis duais ---
 function solveAutomatic(){
   autoIterations = [];
-  // Gera 3 iterações fictícias para interação do aluno
-  autoIterations.push({base:varNames.map(v=>"s_"+v), cells:[[1,0],[0,1]], b:[1,1]});
-  autoIterations.push({base:[varNames[0],"s_"+varNames[1]], cells:[[1,0],[0,1]], b:[2,1]});
-  autoIterations.push({base:varNames, cells:[[1,0],[0,1]], b:[1.5,1]});
+  // Criando 3 iterações fictícias para exemplo didático
+  autoIterations.push({
+    base: varNames.map(v=>"s_"+v),
+    primal:[[1,0],[0,1]],
+    dual:[[0,0],[0,0]],
+    b:[1,1]
+  });
+  autoIterations.push({
+    base: [varNames[0],"s_"+varNames[1]],
+    primal:[[1,0],[0,1]],
+    dual:[[0.5,0],[0,0.5]],
+    b:[2,1]
+  });
+  autoIterations.push({
+    base: varNames,
+    primal:[[1,0],[0,1]],
+    dual:[[1,0],[0,1]],
+    b:[1.5,1]
+  });
 }
 
 // --- Renderizar iteracão para aluno ---
@@ -88,13 +104,16 @@ function renderStudentIteration(iterIdx){
   
   const tbl = document.createElement('table');
   const trh = document.createElement('tr');
-  trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
+  trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+
+                 dualNames.map(d=>`<th>${d}</th>`).join('')+
+                 '<th>b</th>';
   tbl.appendChild(trh);
-  
+
   for(let r=0;r<it.base.length;r++){
     const tr = document.createElement('tr');
     tr.innerHTML=`<td><input type="text" id="base_${r}"></td>`+
-      varNames.map((v,j)=>`<td><input type="text" id="cell_${r}_${j}"></td>`).join('')+
+      varNames.map((v,j)=>`<td><input type="text" id="primal_${r}_${j}"></td>`).join('')+
+      dualNames.map((d,j)=>`<td><input type="text" id="dual_${r}_${j}"></td>`).join('')+
       `<td><input type="text" id="b_${r}"></td>`;
     tbl.appendChild(tr);
   }
@@ -103,10 +122,29 @@ function renderStudentIteration(iterIdx){
   const btnCheck = document.createElement('button');
   btnCheck.innerText='Verificar Iteração';
   btnCheck.onclick = ()=>{
+    let correct = true;
+    for(let r=0;r<it.base.length;r++){
+      if(document.getElementById(`base_${r}`).value.trim()!==it.base[r]) correct=false;
+      for(let j=0;j<varNames.length;j++){
+        let val = parseFloat(document.getElementById(`primal_${r}_${j}`).value);
+        if(Math.abs(val - it.primal[r][j])>1e-4) correct=false;
+      }
+      for(let j=0;j<dualNames.length;j++){
+        let val = parseFloat(document.getElementById(`dual_${r}_${j}`).value);
+        if(Math.abs(val - it.dual[r][j])>1e-4) correct=false;
+      }
+      let bv = parseFloat(document.getElementById(`b_${r}`).value);
+      if(Math.abs(bv - it.b[r])>1e-4) correct=false;
+    }
     const fb = document.getElementById('feedback');
-    fb.innerText='✅ Iteração verificada (simulação didática)';
-    fb.className='status ok';
-    document.getElementById('nextIterBtn').style.display='inline-block';
+    if(correct){
+      fb.innerText='✅ Iteração correta!';
+      fb.className='status ok';
+      document.getElementById('nextIterBtn').style.display='inline-block';
+    } else {
+      fb.innerText='❌ Iteração incorreta, revise os valores.';
+      fb.className='status error';
+    }
   };
   area.appendChild(btnCheck);
 
@@ -122,7 +160,7 @@ function renderStudentIteration(iterIdx){
     } else {
       document.getElementById('finalize').style.display='inline-block';
       const fb = document.getElementById('feedback');
-      fb.innerText='✅ Todas as iterações preenchidas. Agora verifique KKT.';
+      fb.innerText='✅ Todas as iterações preenchidas. Agora verifique condições de KKT.';
       fb.className='status ok';
     }
   };
@@ -135,7 +173,7 @@ function generatePDF(){
   const doc = new jsPDF();
   doc.text(`Aluno: ${studentName}`,10,10);
   doc.text(`Função Objetivo: ${objectiveFunc}`,10,20);
-  doc.text('Iterações preenchidas:',10,30);
+  doc.text(`Restrições: ${constraintsArr.map(c=>c.expr+" "+c.type).join(', ')}`,10,30);
   autoIterations.forEach((it,i)=>{
     doc.text(`Iteração ${i+1}: Base = ${it.base.join(', ')}`,10,40+i*10);
   });
@@ -152,9 +190,9 @@ document.getElementById('start').addEventListener('click', ()=>{
   document.getElementById('iterationsArea').innerHTML='';
   renderStudentIteration(currentIter);
 });
-
 document.getElementById('finalize').addEventListener('click', generatePDF);
 
 </script>
 </body>
 </html>
+
