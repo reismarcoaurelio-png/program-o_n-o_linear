@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Simplex KKT Dinâmico - Passo a Passo</title>
+<title>Simplex KKT - Interativo</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1,h2{margin-bottom:12px}
@@ -22,7 +22,7 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 </head>
 <body>
 
-<h1>Simplex KKT - Passo a Passo</h1>
+<h1>Simplex KKT - Passo a Passo Interativo</h1>
 
 <h2>Problema:</h2>
 <p id="problemText">
@@ -44,14 +44,7 @@ x1 ≥ 0, x2 ≥ 0
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// Variáveis globais
-let studentName = '';
-let tableaux = [];
-let currentIter = 0;
-let scores = [];
-const varNames = ['x1','x2','x3','y1','y2','y3'];
-
-// Funções utilitárias
+// --- Utilitários para frações e decimais ---
 function parseInput(val){
   val = val.trim();
   if(!val) return NaN;
@@ -62,99 +55,133 @@ function parseInput(val){
     return parseFloat(val);
   }
 }
-
 function isCorrect(valAluno, valCorreto){
-  return Math.abs(parseInput(valAluno) - valCorreto) < 1e-6;
+  let a = parseInput(valAluno);
+  let c = parseFloat(valCorreto);
+  return Math.abs(a - c) < 1e-6;
 }
 
-// Classe Simplex KKT
-class SimplexKKT {
+// --- Dados KKT ---
+const varNames = ['x1','x2','x3','y1','y2','y3'];
+let studentName='', tableaux=[], currentIter=0,scores=[];
+
+// --- Classe Simplex KKT ---
+class SimplexKKT{
   constructor(){
-    this.base = ['x3','y1','y2']; // Base inicial
-    this.A = [
+    // Base inicial
+    this.base=['x3','y1','y2'];
+    // Matriz A: cada linha é uma equação do KKT
+    this.A=[
       [2,4,1,0,0,0],
       [-2,0,0,1,0,-2],
       [0,-4,0,0,1,-4]
     ];
-    this.b = [8,-6,-8];
-    this.iterations = [];
+    this.b=[8,-6,-8];
+    this.iterations=[];
     this.saveIteration();
   }
 
   saveIteration(){
-    const Acopy = this.A.map(row=>[...row]);
-    const bcopy = [...this.b];
-    const baseCopy = [...this.base];
-    this.iterations.push({baseVars:baseCopy,A:Acopy,b:bcopy});
+    // Salva cópia da tabela atual
+    this.iterations.push({
+      baseVars:[...this.base],
+      A:this.A.map(r=>[...r]),
+      b:[...this.b]
+    });
   }
 
-  nextIteration(){
-    // Encontra candidato a entrar: primeira coluna fora da base mais negativa
-    let entering=-1; let mostNeg=0;
+  pivot(row, col){
+    // Pivot simples numericamente (linha: row, coluna: col)
+    const pivotVal=this.A[row][col];
+    // Normaliza a linha do pivot
+    for(let j=0;j<this.A[row].length;j++) this.A[row][j]/=pivotVal;
+    this.b[row]/=pivotVal;
+    // Zera coluna nas outras linhas
+    for(let i=0;i<this.A.length;i++){
+      if(i===row) continue;
+      const factor=this.A[i][col];
+      for(let j=0;j<this.A[i].length;j++) this.A[i][j]-=factor*this.A[row][j];
+      this.b[i]-=factor*this.b[row];
+    }
+    // Troca base
+    this.base[row]=varNames[col];
+    this.saveIteration();
+  }
+
+  // Retorna índice de variável candidata a entrar (mais negativa)
+  enteringVar(){
+    let minVal=0, idx=-1;
     for(let j=0;j<varNames.length;j++){
       if(!this.base.includes(varNames[j])){
         let val=0;
         for(let i=0;i<this.A.length;i++){
-          if(this.base[i].startsWith('y')) val+=this.A[i][j];
+          val+=this.A[i][j]; // soma coeficientes
         }
-        if(val<mostNeg){ mostNeg=val; entering=j; }
+        if(val<minVal){ minVal=val; idx=j; }
       }
     }
-    if(entering===-1) return false; // ótimo atingido
+    return idx;
+  }
 
-    // Determina saída: complementar da que entra
-    const leaving=this.base.findIndex(bv=>{
-      return (bv.startsWith('x') && 'y'+bv.slice(1)===varNames[entering])||
-             (bv.startsWith('y') && 'x'+bv.slice(1)===varNames[entering]);
-    });
-    if(leaving===-1) return false;
+  // Determina saída (complementar)
+  leavingVar(enterCol){
+    for(let i=0;i<this.base.length;i++){
+      const bv=this.base[i];
+      const comp = (bv.startsWith('x') ? 'y'+bv.slice(1) : 'x'+bv.slice(1));
+      if(varNames[enterCol]===comp) return i;
+    }
+    return -1;
+  }
 
-    // Pivot simplificado: apenas troca base para o aluno preencher
-    this.base[leaving]=varNames[entering];
-    this.saveIteration();
+  // Executa próxima iteração
+  nextIteration(){
+    const enter=this.enteringVar();
+    if(enter===-1) return false;
+    const leave=this.leavingVar(enter);
+    if(leave===-1) return false;
+    this.pivot(leave,enter);
     return true;
   }
 }
 
-// Inicialização
+// --- Inicialização ---
 let simplex=null;
 function start(){
-  studentName = document.getElementById('studentName').value.trim();
+  studentName=document.getElementById('studentName').value.trim();
   if(!studentName){ alert('Digite seu nome!'); return; }
 
-  simplex = new SimplexKKT();
+  simplex=new SimplexKKT();
   // Gera iterações até o ótimo
   while(simplex.nextIteration()){}
-  tableaux = simplex.iterations;
+  tableaux=simplex.iterations;
   currentIter=0;
   scores=[];
   renderIteration(currentIter);
   document.getElementById('feedback').innerText='Preencha a primeira tabela e clique em "Verificar Iteração".';
 }
 
-// Renderiza tabela da iteração
+// --- Renderização ---
 function renderIteration(idx){
-  const iter = tableaux[idx];
-  const area = document.getElementById('iterationsArea');
-  const div = document.createElement('div');
+  const iter=tableaux[idx];
+  const area=document.getElementById('iterationsArea');
+  const div=document.createElement('div');
   div.className='iteration';
-  div.innerHTML = `<strong>Iteração ${idx+1}:</strong>`;
-  const tbl = document.createElement('table');
+  div.innerHTML=`<strong>Iteração ${idx+1}:</strong>`;
+  const tbl=document.createElement('table');
 
-  const thead = document.createElement('thead');
-  const htr = document.createElement('tr');
-  htr.innerHTML = '<th>Base</th>' + varNames.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
+  const thead=document.createElement('thead');
+  const htr=document.createElement('tr');
+  htr.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
   thead.appendChild(htr);
   tbl.appendChild(thead);
 
-  const tbody = document.createElement('tbody');
+  const tbody=document.createElement('tbody');
   for(let i=0;i<iter.baseVars.length;i++){
-    const tr = document.createElement('tr');
+    const tr=document.createElement('tr');
     const tdBase=document.createElement('td');
     const inputBase=document.createElement('input');
     inputBase.type='text'; inputBase.className='basicVar'; inputBase.dataset.row=i;
-    tdBase.appendChild(inputBase);
-    tr.appendChild(tdBase);
+    tdBase.appendChild(inputBase); tr.appendChild(tdBase);
 
     for(let j=0;j<varNames.length;j++){
       const td=document.createElement('td');
@@ -180,7 +207,7 @@ function renderIteration(idx){
   area.appendChild(div);
 }
 
-// Verifica tabela preenchida pelo aluno
+// --- Verificação ---
 function checkIteration(idx,div,tbl){
   const iter=tableaux[idx];
   let correct=0,total=0;
@@ -226,7 +253,7 @@ function checkIteration(idx,div,tbl){
   }
 }
 
-// PDF
+// --- PDF ---
 document.getElementById('downloadPdf').addEventListener('click',()=>{
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -244,3 +271,4 @@ document.getElementById('startBtn').addEventListener('click',start);
 </script>
 </body>
 </html>
+
