@@ -33,16 +33,19 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 <div id="problemArea"></div>
 <div id="iterationsArea"></div>
 <div id="feedback" class="status">Clique em "Iniciar" para gerar a primeira tabela.</div>
+<button id="downloadPdf" style="display:none;">Baixar Relatório PDF</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const varNames = ['x1','x2','x3','y1','y2','y3']; 
 let studentName = '';
 let currentTableau = 0;
+let scores = [];
 
 // --- Função para interpretar frações ---
 function parseInput(val){
   val = val.trim();
+  if(!val) return NaN;
   if(val.includes('/')){
     const parts = val.split('/');
     return parseFloat(parts[0])/parseFloat(parts[1]);
@@ -51,9 +54,12 @@ function parseInput(val){
   }
 }
 
+function isCorrect(valAluno, valCorreto){
+  return Math.abs(parseInput(valAluno) - valCorreto) < 1e-6;
+}
+
 // --- Tabelas preparadas (KKT) ---
 const tableaux = [
-  // Iteração 1
   {
     baseVars:['x3','y1','y2'],
     A:[
@@ -63,7 +69,6 @@ const tableaux = [
     ],
     b:[8,-6,-8]
   },
-  // Iteração 2 (x2 entra, y2 sai)
   {
     baseVars:['x3','y1','x2'],
     A:[
@@ -71,7 +76,7 @@ const tableaux = [
       [-2,0,0,1,0,-2],
       [0,1,0,0,0,0.25]
     ],
-    b:[0,-6,1]
+    b:[0,-6,2]
   }
 ];
 
@@ -87,6 +92,7 @@ function buildProblem(){
   Multiplicadores KKT: y1,y2,y3<br>
   Preencha a tabela manualmente e clique em "Verificar Iteração".`;
 
+  scores = [];
   renderTableau(currentTableau);
 }
 
@@ -94,7 +100,9 @@ function buildProblem(){
 function renderTableau(idx){
   const tableau = tableaux[idx];
   const area = document.getElementById('iterationsArea');
-  area.innerHTML = `<strong>Iteração ${idx+1}:</strong>`;
+  const div = document.createElement('div');
+  div.className='iteration';
+  div.innerHTML = `<strong>Iteração ${idx+1}:</strong>`;
   const tbl = document.createElement('table');
 
   // Cabeçalho
@@ -108,14 +116,13 @@ function renderTableau(idx){
   const tbody = document.createElement('tbody');
   for(let i=0;i<tableau.baseVars.length;i++){
     const tr = document.createElement('tr');
-    // Base
     const tdBase = document.createElement('td');
     const inputBase = document.createElement('input');
     inputBase.type='text'; inputBase.className='basicVar';
     inputBase.dataset.row=i;
     tdBase.appendChild(inputBase);
     tr.appendChild(tdBase);
-    // Coeficientes
+
     for(let j=0;j<varNames.length;j++){
       const td = document.createElement('td');
       const input = document.createElement('input');
@@ -125,7 +132,7 @@ function renderTableau(idx){
       td.appendChild(input);
       tr.appendChild(td);
     }
-    // b
+
     const tdB = document.createElement('td');
     const inputB = document.createElement('input');
     inputB.type='text';
@@ -137,21 +144,23 @@ function renderTableau(idx){
     tbody.appendChild(tr);
   }
   tbl.appendChild(tbody);
-  area.appendChild(tbl);
+  div.appendChild(tbl);
 
   const btn = document.createElement('button');
   btn.innerText='Verificar Iteração';
-  btn.addEventListener('click',()=>checkTableau(idx));
-  area.appendChild(btn);
+  btn.addEventListener('click',()=>checkTableau(idx, div, tbl));
+  div.appendChild(btn);
+
+  area.appendChild(div);
 }
 
 // --- Verificação ---
-function checkTableau(idx){
+function checkTableau(idx, div, tbl){
   const tableau = tableaux[idx];
   let correct=0, total=0;
 
   // Base
-  const inputsBase = document.querySelectorAll('input.basicVar');
+  const inputsBase = tbl.querySelectorAll('input.basicVar');
   inputsBase.forEach((inp,i)=>{
     total++;
     if(inp.value.trim()===tableau.baseVars[i]) inp.parentElement.className='correct', correct++;
@@ -162,8 +171,8 @@ function checkTableau(idx){
   for(let i=0;i<tableau.baseVars.length;i++){
     for(let j=0;j<varNames.length;j++){
       total++;
-      const inp = document.querySelector(`input[data-row='${i}'][data-col='${j}']`);
-      if(Math.abs(parseInput(inp.value) - tableau.A[i][j])<1e-2) inp.parentElement.className='correct', correct++;
+      const inp = tbl.querySelector(`input[data-row='${i}'][data-col='${j}']`);
+      if(isCorrect(inp.value, tableau.A[i][j])) inp.parentElement.className='correct', correct++;
       else inp.parentElement.className='wrong';
     }
   }
@@ -171,23 +180,39 @@ function checkTableau(idx){
   // b
   for(let i=0;i<tableau.baseVars.length;i++){
     total++;
-    const inp = document.querySelector(`input[data-row='${i}'][data-b]`);
-    if(Math.abs(parseInput(inp.value) - tableau.b[i])<1e-2) inp.parentElement.className='correct', correct++;
+    const inp = tbl.querySelector(`input[data-row='${i}'][data-b]`);
+    if(isCorrect(inp.value, tableau.b[i])) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   }
 
+  scores[idx] = Math.round(100*correct/total);
+
   const fb = document.getElementById('feedback');
-  fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos`;
+  fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos. Nota: ${scores[idx]}%`;
   fb.className='status '+(correct===total?'ok':'error');
 
-  // Avançar para próxima iteração
-  if(idx+1<tableaux.length){
+  // Mostrar botão PDF na última iteração
+  if(idx+1===tableaux.length){
+    document.getElementById('downloadPdf').style.display='inline-block';
+  } else {
     currentTableau++;
     renderTableau(currentTableau);
-  } else {
-    fb.innerText += " ✅ Todas as iterações completadas!";
   }
 }
+
+// --- PDF ---
+document.getElementById('downloadPdf').addEventListener('click',()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(12);
+  doc.text(`Aluno: ${studentName}`, 10, 10);
+  tableaux.forEach((t,i)=>{
+    doc.text(`Iteração ${i+1}: Nota ${scores[i]}%`,10,20+i*10);
+  });
+  const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+  doc.text(`Nota final: ${avg}%`,10,40+tableaux.length*10);
+  doc.save(`relatorio_${studentName.replace(/\s/g,'_')}.pdf`);
+});
 
 document.getElementById('build').addEventListener('click',buildProblem);
 </script>
