@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>QP KKT Interativo - Simplex Passo a Passo</title>
+<title>Simplex KKT Manual</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1{font-size:22px;margin-bottom:12px}
-.input-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.input-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
 input[type="number"], input[type="text"]{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;width:80px;text-align:right}
-input[type="text"].basicVar{width:60px;text-align:center}
+input.basicVar{width:60px;text-align:center}
 button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:#2563eb;color:white;margin-top:5px}
 table{border-collapse:collapse;margin-top:12px}
 th,td{border:1px solid #999;padding:6px;text-align:center}
@@ -22,71 +22,105 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 </head>
 <body>
 
-<h1>QP KKT Interativo - Simplex Passo a Passo</h1>
+<h1>Simplex KKT Manual - Max z = -x1² +6x1 -2x2² +8x2</h1>
 
 <div class="input-row">
 <label>Aluno:</label>
 <input id="studentName" type="text" placeholder="Digite seu nome"/>
-<button id="build">Gerar Problema</button>
+<button id="build">Iniciar</button>
 </div>
 
 <div id="problemArea"></div>
 <div id="iterationsArea"></div>
-<div id="feedback" class="status">Clique em "Gerar Problema" para iniciar.</div>
+<div id="feedback" class="status">Clique em "Iniciar" para gerar a primeira tabela.</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // --- Problema fixo ---
-let problem = null;
-let nIterations = 1; // apenas um tableau neste exemplo
+const varNames = ['x1','x2','x3','y1','y2','y3']; // sistema KKT
 
-function buildProblem(){
-  const studentName = document.getElementById('studentName').value.trim();
-  if(!studentName){ alert('Digite o nome do aluno!'); return; }
+let studentName = '';
+let currentTableau = 0;
 
-  // Problema exemplo
-  problem = {
-    vars:['x1','x2','x3','y1','y2','y3'],
-    baseVars:['x3','y1','y2'], // variáveis básicas deste tableau
-    A:[
-      [2,4,1,0,0,0],
-      [-2,0,0,1,0,-2],
-      [0,-4,0,0,1,-4]
-    ],
-    b:[0,-6,-8]
-  };
+// --- Tabelas calculadas (inicial) ---
+let tableaux = []; // cada elemento: {baseVars:[], A:[], b:[]}
 
-  document.getElementById('problemArea').innerHTML = `
-    <strong>Problema:</strong><br>
-    Max z = -x1² +6x1 -2x2² +8x2<br>
-    Sujeito a: 2x1+4x2 ≤ 0, x1≥0, x2≥0<br>
-    Variável de folga x3 = - (2x1+4x2) ≥0<br>
-    Preencha manualmente o tableau KKT:<br>
-    - Primeira coluna: variáveis básicas<br>
-    - Colunas seguintes: coeficientes do sistema KKT<br>
-    - Última coluna "b": valor das variáveis básicas<br>
-    Clique "Verificar Iteração" para validar.`;
-
-  renderTableau();
+// Função para gerar tabela inicial
+function generateInitialTableau(){
+  // Iteração 1
+  const baseVars = ['x3','y1','y2'];
+  const A = [
+    [2,4,1,0,0,0],
+    [-2,0,0,1,0,-2],
+    [0,-4,0,0,1,-4]
+  ];
+  const b = [8,-6,-8];
+  tableaux.push({baseVars,A,b});
 }
 
-function renderTableau(){
+// Função para gerar próxima tabela (pivoteamento automático)
+function pivotTableau(prevTableau, rowOutIdx, colInIdx){
+  const A = prevTableau.A.map(r=>r.slice()); // deep copy
+  const b = prevTableau.b.slice();
+  const baseVars = prevTableau.baseVars.slice();
+  
+  const pivot = A[rowOutIdx][colInIdx];
+  if(Math.abs(pivot)<1e-6) return null;
+
+  // Dividir linha pivot
+  for(let j=0;j<A[rowOutIdx].length;j++) A[rowOutIdx][j] /= pivot;
+  b[rowOutIdx] /= pivot;
+
+  // Eliminação nas outras linhas
+  for(let i=0;i<A.length;i++){
+    if(i!==rowOutIdx){
+      const factor = A[i][colInIdx];
+      for(let j=0;j<A[i].length;j++){
+        A[i][j] -= factor*A[rowOutIdx][j];
+      }
+      b[i] -= factor*b[rowOutIdx];
+    }
+  }
+
+  // Trocar variável na base
+  baseVars[rowOutIdx] = varNames[colInIdx];
+
+  return {baseVars,A,b};
+}
+
+// --- Render ---
+function buildProblem(){
+  studentName = document.getElementById('studentName').value.trim();
+  if(!studentName){ alert('Digite seu nome!'); return; }
+
+  generateInitialTableau();
+  document.getElementById('problemArea').innerHTML = `<strong>Problema:</strong><br>
+  Max z = -x1² +6x1 -2x2² +8x2<br>
+  Sujeito a: 2x1+4x2 ≤ 8, x1≥0, x2≥0<br>
+  Variável de folga: x3<br>
+  Multiplicadores KKT: y1,y2,y3<br>
+  Preencha a tabela manualmente e clique em "Verificar Iteração".`;
+
+  renderTableau(currentTableau);
+}
+
+// --- Render tabela interativa ---
+function renderTableau(idx){
+  const tableau = tableaux[idx];
   const area = document.getElementById('iterationsArea');
-  area.innerHTML = '';
-  const div = document.createElement('div');
-  div.innerHTML = `<strong>Tableau KKT:</strong>`;
+  area.innerHTML = `<strong>Iteração ${idx+1}:</strong>`;
   const tbl = document.createElement('table');
 
   // Cabeçalho
   const thead = document.createElement('thead');
   const htr = document.createElement('tr');
-  htr.innerHTML = '<th>Base</th>' + problem.vars.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
+  htr.innerHTML = '<th>Base</th>' + varNames.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
   thead.appendChild(htr);
   tbl.appendChild(thead);
 
   // Corpo
   const tbody = document.createElement('tbody');
-  for(let i=0;i<problem.baseVars.length;i++){
+  for(let i=0;i<tableau.baseVars.length;i++){
     const tr = document.createElement('tr');
     // Base
     const tdBase = document.createElement('td');
@@ -95,22 +129,20 @@ function renderTableau(){
     inputBase.dataset.row=i;
     tdBase.appendChild(inputBase);
     tr.appendChild(tdBase);
-
     // Coeficientes
-    for(let j=0;j<problem.vars.length;j++){
+    for(let j=0;j<varNames.length;j++){
       const td = document.createElement('td');
       const input = document.createElement('input');
-      input.type='number'; input.style.width='60px';
+      input.type='number'; input.step='0.01';
       input.dataset.row=i;
       input.dataset.col=j;
       td.appendChild(input);
       tr.appendChild(td);
     }
-
     // b
     const tdB = document.createElement('td');
     const inputB = document.createElement('input');
-    inputB.type='number'; inputB.style.width='60px';
+    inputB.type='number'; inputB.step='0.01';
     inputB.dataset.row=i;
     inputB.dataset.b=true;
     tdB.appendChild(inputB);
@@ -119,105 +151,63 @@ function renderTableau(){
     tbody.appendChild(tr);
   }
   tbl.appendChild(tbody);
-  div.appendChild(tbl);
+  area.appendChild(tbl);
 
   const btn = document.createElement('button');
-  btn.innerText='Verificar Tableau';
-  btn.addEventListener('click',checkTableau);
-  div.appendChild(btn);
-
-  const finalBtn = document.createElement('button');
-  finalBtn.innerText='Finalizar e Gerar Relatório';
-  finalBtn.addEventListener('click',finalCheck);
-  div.appendChild(finalBtn);
-
-  area.appendChild(div);
+  btn.innerText='Verificar Iteração';
+  btn.addEventListener('click',()=>checkTableau(idx));
+  area.appendChild(btn);
 }
 
-// --- Verificação do tableau ---
-function checkTableau(){
-  let correct=0;
-  let total=0;
+// --- Verificação ---
+function checkTableau(idx){
+  const tableau = tableaux[idx];
+  let correct=0, total=0;
 
   // Base
-  const inputsBase = document.querySelectorAll('#iterationsArea input.basicVar');
+  const inputsBase = document.querySelectorAll('input.basicVar');
   inputsBase.forEach((inp,i)=>{
     total++;
-    if(inp.value.trim()===problem.baseVars[i]){inp.parentElement.className='correct'; correct++;} 
+    if(inp.value.trim()===tableau.baseVars[i]) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   });
 
   // Coeficientes
-  for(let i=0;i<problem.baseVars.length;i++){
-    for(let j=0;j<problem.vars.length;j++){
+  for(let i=0;i<tableau.baseVars.length;i++){
+    for(let j=0;j<varNames.length;j++){
       total++;
-      const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-col='${j}']`);
-      if(Math.abs(+inp.value - problem.A[i][j])<1e-3){inp.parentElement.className='correct'; correct++;} 
+      const inp = document.querySelector(`input[data-row='${i}'][data-col='${j}']`);
+      if(Math.abs(+inp.value - tableau.A[i][j])<1e-2) inp.parentElement.className='correct', correct++;
       else inp.parentElement.className='wrong';
     }
   }
 
   // b
-  for(let i=0;i<problem.baseVars.length;i++){
+  for(let i=0;i<tableau.baseVars.length;i++){
     total++;
-    const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-b]`);
-    if(Math.abs(+inp.value - problem.b[i])<1e-3){inp.parentElement.className='correct'; correct++;} 
+    const inp = document.querySelector(`input[data-row='${i}'][data-b]`);
+    if(Math.abs(+inp.value - tableau.b[i])<1e-2) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   }
 
   const fb = document.getElementById('feedback');
-  fb.innerText=`Tableau: ${correct}/${total} valores corretos`;
+  fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos`;
   fb.className='status '+(correct===total?'ok':'error');
-}
 
-// --- Verificação final e PDF ---
-function finalCheck(){
-  const studentName = document.getElementById('studentName').value.trim();
-  let correctTotal=0;
-  let totalCells=0;
-
-  // Base
-  const inputsBase = document.querySelectorAll('#iterationsArea input.basicVar');
-  inputsBase.forEach((inp,i)=>{ totalCells++; if(inp.value.trim()===problem.baseVars[i]) correctTotal++; });
-
-  // Coeficientes
-  for(let i=0;i<problem.baseVars.length;i++){
-    for(let j=0;j<problem.vars.length;j++){ totalCells++;
-      const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-col='${j}']`);
-      if(Math.abs(+inp.value - problem.A[i][j])<1e-3) correctTotal++;
-    }
+  // Preparar próxima iteração de exemplo (manual)
+  if(idx===0 && tableaux.length<2){
+    const nextTableau = pivotTableau(tableaux[0],0,0); // Exemplo pivot: x1 entra, x3 sai
+    tableaux.push(nextTableau);
   }
 
-  // b
-  for(let i=0;i<problem.baseVars.length;i++){ totalCells++;
-    const inp = document.querySelector(`#iterationsArea input[data-row='${i}'][data-b]`);
-    if(Math.abs(+inp.value - problem.b[i])<1e-3) correctTotal++;
+  // Avançar para próxima iteração
+  if(idx+1<tableaux.length){
+    currentTableau++;
+    renderTableau(currentTableau);
   }
-
-  const score = Math.round(correctTotal/totalCells*100);
-  const fb = document.getElementById('feedback');
-  fb.innerText=`✅ ${studentName} - Nota Final: ${score}/100 (${correctTotal}/${totalCells} valores corretos)`;
-  fb.className='status ok';
-
-  // gerar PDF
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text('Relatório de Desempenho - Simplex KKT',20,20);
-  doc.setFontSize(12);
-  doc.text(`Aluno: ${studentName}`,20,35);
-  doc.text(`Nota Final: ${score}/100`,20,45);
-  doc.text(`Valores corretos: ${correctTotal}/${totalCells}`,20,55);
-  doc.text('Tableau KKT:',20,65);
-  doc.text(`Base: ${problem.baseVars.join(', ')}`,20,75);
-  doc.text(`A: [${problem.A.map(row=>row.join(', ')).join(' | ')}]`,20,85);
-  doc.text(`b: [${problem.b.join(', ')}]`,20,95);
-  doc.save(`Relatorio_${studentName.replace(/\s+/g,'_')}.pdf`);
 }
 
 document.getElementById('build').addEventListener('click',buildProblem);
-
 </script>
 </body>
 </html>
-
