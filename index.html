@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>QP Interativo - Simplex + KKT</title>
+<style>
+body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
+h1{font-size:22px;margin-bottom:12px}
+.input-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+input[type="number"], input[type="text"]{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;width:80px;text-align:right}
+input[type="text"]{width:200px;text-align:left;text-align:start}
+button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:#2563eb;color:white;margin-top:5px}
+table{border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #999;padding:6px;text-align:right}
+td.correct{background:#dcfce7;color:#065f46}
+td.wrong{background:#fee2e2;color:#9b1c1c}
+.status{padding:8px;border-radius:6px;margin-top:10px}
+.ok{background:#dcfce7;color:#065f46}
+.error{background:#fee2e2;color:#9b1c1c}
+</style>
+</head>
+<body>
+
+<h1>Programação Quadrática - Simplex + Condições KKT</h1>
+
+<div class="input-row">
+<label>Aluno:</label>
+<input id="studentName" type="text" placeholder="Digite seu nome"/>
+<button id="build">Gerar Problema QP</button>
+</div>
+
+<div id="problemArea"></div>
+<div id="simplexArea"></div>
+<div id="kktArea"></div>
+<div id="feedback" class="status">Clique em Gerar Problema para iniciar.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+let problem=null, solution=null, tableauIterations=[];
+
+// --- Gerar problema QP fixo para demonstração ---
+function buildProblem(){
+  const studentName = document.getElementById('studentName').value.trim();
+  if(!studentName){ alert('Digite o nome do aluno!'); return; }
+
+  problem = {
+    Q:[[4,1],[1,2]],
+    c:[-8,-6],
+    A:[[1,1],[1,0],[0,1]],
+    b:[5,3,2],
+    xStar:[2,3],
+    lambdaStar:[0,0,1]
+  };
+
+  const area = document.getElementById('problemArea');
+  area.innerHTML = `<strong>Problema QP:</strong><br>
+  Minimize: (1/2)x^T Q x + c^T x <br>
+  Q = [[4,1],[1,2]], c = [-8,-6] <br>
+  Sujeito a: <br>
+  x1 + x2 ≤ 5 <br>
+  x1 ≤ 3 <br>
+  x2 ≤ 2 <br>
+  x1 ≥ 0, x2 ≥ 0 <br><br>
+  A seguir, será mostrado o Simplex iterativo.`;
+
+  simulateSimplex();
+  renderSimplexTable();
+  renderKKTInputs();
+}
+
+// --- Simular Simplex (simplificado para demonstração) ---
+function simulateSimplex(){
+  // Aqui colocamos um exemplo de iterações predefinidas
+  // Na prática, um solver real de QP seria necessário
+  tableauIterations=[
+    {iteration:1, x:[0,0], z:-0, activeConstraints:[2]}, 
+    {iteration:2, x:[2,0], z:-8, activeConstraints:[1,2]}, 
+    {iteration:3, x:[2,3], z:-23, activeConstraints:[2,3]} 
+  ];
+}
+
+// --- Renderizar iterações do Simplex ---
+function renderSimplexTable(){
+  const area = document.getElementById('simplexArea');
+  area.innerHTML='<strong>Iterações do Simplex:</strong><br>';
+  tableauIterations.forEach(tab=>{
+    const tbl = document.createElement('table');
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    htr.innerHTML='<th>Iteração</th><th>x1</th><th>x2</th><th>z</th><th>Restrições Ativas</th>';
+    thead.appendChild(htr); tbl.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML=`<td>${tab.iteration}</td><td>${tab.x[0]}</td><td>${tab.x[1]}</td><td>${tab.z}</td><td>${tab.activeConstraints.join(', ')}</td>`;
+    tbody.appendChild(tr);
+    tbl.appendChild(tbody);
+    area.appendChild(tbl);
+  });
+}
+
+// --- Renderizar inputs KKT ---
+function renderKKTInputs(){
+  const area = document.getElementById('kktArea');
+  area.innerHTML = '<strong>Preencha os valores de KKT:</strong><br>';
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  htr.innerHTML = '<th>λ / Gradiente</th><th>Valor</th>';
+  thead.appendChild(htr);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+
+  const labels = ['λ1 (x1+x2≤5)','λ2 (x1≤3)','λ3 (x2≤2)','grad1 (∂L/∂x1)','grad2 (∂L/∂x2)'];
+  labels.forEach((label,i)=>{
+    const tr = document.createElement('tr');
+    const tdLabel = document.createElement('td'); tdLabel.innerText=label;
+    const tdInput = document.createElement('td');
+    const input = document.createElement('input'); input.type='number'; input.id='kkt_'+i;
+    tdInput.appendChild(input);
+    tr.appendChild(tdLabel); tr.appendChild(tdInput);
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  area.appendChild(table);
+
+  const btn = document.createElement('button');
+  btn.innerText='Verificar KKT';
+  btn.addEventListener('click', checkKKT);
+  area.appendChild(btn);
+}
+
+// --- Verificar respostas ---
+function checkKKT(){
+  const studentName = document.getElementById('studentName').value.trim();
+  if(!studentName){ alert('Digite o nome do aluno!'); return; }
+
+  const inputs = [];
+  for(let i=0;i<5;i++) inputs.push(+document.getElementById('kkt_'+i).value);
+
+  const lambda = inputs.slice(0,3);
+  const grad = inputs.slice(3,5);
+
+  const correctLambda = problem.lambdaStar;
+  const correctGrad = [
+    problem.Q[0][0]*problem.xStar[0] + problem.Q[0][1]*problem.xStar[1] + problem.c[0] + correctLambda[0]*1 + correctLambda[1]*1,
+    problem.Q[1][0]*problem.xStar[0] + problem.Q[1][1]*problem.xStar[1] + problem.c[1] + correctLambda[0]*1 + correctLambda[2]*1
+  ];
+
+  let correctCount=0;
+  const total=inputs.length;
+
+  inputs.forEach((val,i)=>{
+    let expected;
+    if(i<3) expected=correctLambda[i];
+    else expected=correctGrad[i-3];
+    if(Math.abs(val-expected)<1e-3){ 
+      correctCount++;
+      document.getElementById('kkt_'+i).parentElement.className='correct';
+    } else {
+      document.getElementById('kkt_'+i).parentElement.className='wrong';
+    }
+  });
+
+  const score = Math.round((correctCount/total)*100);
+  const fb = document.getElementById('feedback');
+  fb.innerText = score===100? `✅ Parabéns, ${studentName}! Todos os valores corretos. Nota: ${score}/100`:
+                             `❌ Alguns valores incorretos. Nota: ${score}/100`;
+  fb.className = score===100?'status ok':'status error';
+  addDownloadButton(studentName, score, correctCount, total);
+}
+
+// --- PDF ---
+function addDownloadButton(name, score, correct, total){
+  const existingBtn = document.getElementById('downloadPDF');
+  if(existingBtn) existingBtn.remove();
+  const btn = document.createElement('button');
+  btn.id='downloadPDF';
+  btn.innerText='Baixar Relatório em PDF';
+  btn.addEventListener('click', ()=>{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Relatório de Desempenho - Simplex + KKT', 20, 20);
+    doc.setFontSize(12);
+    doc.text(`Aluno: ${name}`, 20, 35);
+    doc.text(`Nota: ${score}/100`, 20, 45);
+    doc.text(`Valores corretos: ${correct} de ${total}`, 20, 55);
+    doc.text('Iterações do Simplex:',20,65);
+    let y=75;
+    tableauIterations.forEach(tab=>{
+      doc.text(`Iter ${tab.iteration}: x=[${tab.x.join(', ')}], z=${tab.z}, restrições ativas=[${tab.activeConstraints.join(', ')}]`,20,y);
+      y+=7;
+    });
+    doc.save(`Relatorio_${name.replace(/\s+/g,'_')}.pdf`);
+  });
+  document.getElementById('kktArea').appendChild(btn);
+}
+
+document.getElementById('build').addEventListener('click', buildProblem);
+</script>
+</body>
+</html>
