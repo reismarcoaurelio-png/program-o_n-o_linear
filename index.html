@@ -2,12 +2,13 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Simplex KKT - Quadrático Automático</title>
+<title>Simplex KKT - Interativo para Aluno</title>
 <style>
-body { font-family: Arial, sans-serif; padding: 20px; background:#f7f9fb; }
+body { font-family: Arial, sans-serif; padding:20px; background:#f7f9fb; }
 table { border-collapse: collapse; margin-top:10px; }
 th, td { border:1px solid #999; padding:5px; text-align:center; }
 th { background:#eee; }
+input { width:60px; text-align:center; }
 button { padding:6px 10px; margin:5px; }
 .status { margin-top:10px; padding:8px; border-radius:5px; }
 .ok { background:#dcfce7; color:#065f46; }
@@ -15,42 +16,48 @@ button { padding:6px 10px; margin:5px; }
 </style>
 </head>
 <body>
-<h1>Simplex KKT - Quadrático Automático teste</h1>
 
+<h1>Simplex KKT - Quadrático Interativo</h1>
+
+<label>Nome do aluno: <input id="studentName" type="text"></label>
 <p>Problema:</p>
 <pre>
-Max z = -x1² + 6x1 - 2x2² + 8x2
+Max z = -x1² +6x1 -2x2² +8x2
 Sujeito a: 2x1 + 4x2 ≤ 8
 x1 ≥ 0, x2 ≥ 0
 </pre>
 
-<button id="autoSolve">Resolver Automaticamente</button>
-<div id="iterations"></div>
-<div class="status" id="feedback">Clique em "Resolver Automaticamente" para ver as iterações.</div>
+<button id="start">Iniciar Iterações</button>
+<div id="iterationsArea"></div>
+<div class="status" id="feedback">Clique em "Iniciar Iterações" para preencher passo a passo.</div>
+<button id="finalize" style="display:none;">Finalizar e Gerar Relatório</button>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // --- Variáveis ---
-const varNames = ['x1','x2','x3','y1','y2','y3']; // x3=folga, y's=complementares
-let base = ['x3','y1','y2']; // base inicial
+const varNames = ['x1','x2','x3','y1','y2','y3'];
+let autoIterations = [];
+let currentIter = 0;
+let base = ['x3','y1','y2'];
 let A = [
-  [2, 4, 1, 0, 0, 0],   // restrição + folga
-  [-2, 0, 0, 1, 0, -2], // d/dx1
-  [0, -4, 0, 0, 1, -4]  // d/dx2
+  [2,4,1,0,0,0],
+  [-2,0,0,1,0,-2],
+  [0,-4,0,0,1,-4]
 ];
-let b = [8, -6, -8];
-let iterations = [];
+let b = [8,-6,-8];
+let studentName = "";
 
 // --- Funções ---
-function saveIteration() {
-  iterations.push({
-    base: [...base],
-    A: A.map(r => [...r]),
-    b: [...b]
+function saveAutoIteration(){
+  autoIterations.push({
+    base:[...base],
+    A:A.map(r=>[...r]),
+    b:[...b]
   });
 }
 
 // Pivot
-function pivot(row, col) {
+function pivot(row,col){
   const pivotVal = A[row][col];
   for(let j=0;j<A[row].length;j++) A[row][j]/=pivotVal;
   b[row]/=pivotVal;
@@ -61,80 +68,127 @@ function pivot(row, col) {
     b[i] -= factor*b[row];
   }
   base[row] = varNames[col];
-  saveIteration();
+  saveAutoIteration();
 }
 
-// Encontra a variável que entra: complementar da mais negativa da base
+// Variável que entra
 function enteringVar(){
-  let minVal = 0, row=-1;
+  let minVal=0,row=-1;
   for(let i=0;i<b.length;i++){
-    if(b[i]<minVal){
-      minVal = b[i];
-      row = i;
-    }
+    if(b[i]<minVal){ minVal=b[i]; row=i;}
   }
   if(row===-1) return null;
-  const leavingVar = base[row];
-  const enterVar = leavingVar.startsWith('x') ? 'y'+leavingVar.slice(1) : 'x'+leavingVar.slice(1);
+  const leaveVar = base[row];
+  const enterVar = leaveVar.startsWith('x') ? 'y'+leaveVar.slice(1) : 'x'+leaveVar.slice(1);
   const col = varNames.indexOf(enterVar);
   return {row,col};
 }
 
-// Verifica se ótimo
-function isOptimal(){
-  return b.every(v=>v>=0);
-}
+// Ótimo
+function isOptimal(){ return b.every(v=>v>=0); }
 
-// Itera automaticamente
+// Preencher autoIterations
 function solveAutomatic(){
   // reset
   base = ['x3','y1','y2'];
   A = [
-    [2, 4, 1, 0, 0, 0],
-    [-2, 0, 0, 1, 0, -2],
-    [0, -4, 0, 0, 1, -4]
+    [2,4,1,0,0,0],
+    [-2,0,0,1,0,-2],
+    [0,-4,0,0,1,-4]
   ];
   b = [8,-6,-8];
-  iterations=[];
-  saveIteration();
-
+  autoIterations=[];
+  saveAutoIteration();
   while(!isOptimal()){
-    const pivotPos = enteringVar();
-    if(!pivotPos) break;
-    pivot(pivotPos.row, pivotPos.col);
+    const pv = enteringVar();
+    if(!pv) break;
+    pivot(pv.row,pv.col);
   }
-
-  renderIterations();
 }
 
-// Renderiza as iterações
-function renderIterations(){
-  const area = document.getElementById('iterations');
-  area.innerHTML='';
-  iterations.forEach((it,i)=>{
-    const div = document.createElement('div');
-    div.innerHTML=`<strong>Iteração ${i+1}</strong>`;
-    const tbl = document.createElement('table');
-    const trh = document.createElement('tr');
-    trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
-    tbl.appendChild(trh);
-    for(let r=0;r<it.base.length;r++){
-      const tr = document.createElement('tr');
-      tr.innerHTML=`<td>${it.base[r]}</td>`+
-        it.A[r].map(v=>`<td>${v}</td>`).join('')+
-        `<td>${it.b[r]}</td>`;
-      tbl.appendChild(tr);
+// Renderizar uma iteração para aluno preencher
+function renderStudentIteration(iterIdx){
+  const area = document.getElementById('iterationsArea');
+  area.innerHTML=`<h3>Iteração ${iterIdx+1}</h3>`;
+  const tbl = document.createElement('table');
+  const trh = document.createElement('tr');
+  trh.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
+  tbl.appendChild(trh);
+  const n = autoIterations[0].base.length;
+  for(let r=0;r<n;r++){
+    const tr = document.createElement('tr');
+    tr.innerHTML=`<td><input type="text" id="base_${r}"></td>`+
+      varNames.map((v,j)=>`<td><input type="text" id="cell_${r}_${j}"></td>`).join('')+
+      `<td><input type="text" id="b_${r}"></td>`;
+    tbl.appendChild(tr);
+  }
+  area.appendChild(tbl);
+}
+
+// Verificar iteração do aluno
+function checkIteration(iterIdx){
+  let correct = true;
+  const it = autoIterations[iterIdx];
+  for(let r=0;r<it.base.length;r++){
+    if(document.getElementById(`base_${r}`).value.trim()!==it.base[r]) correct=false;
+    for(let j=0;j<varNames.length;j++){
+      let val = document.getElementById(`cell_${r}_${j}`).value.trim();
+      if(val.includes('/')){ // fração
+        const frac = val.split('/');
+        val = parseFloat(frac[0])/parseFloat(frac[1]);
+      } else val = parseFloat(val);
+      if(Math.abs(val - it.A[r][j])>1e-4) correct=false;
     }
-    div.appendChild(tbl);
-    area.appendChild(div);
+    let bv = document.getElementById(`b_${r}`).value.trim();
+    if(bv.includes('/')){
+      const frac = bv.split('/');
+      bv = parseFloat(frac[0])/parseFloat(frac[1]);
+    } else bv = parseFloat(bv);
+    if(Math.abs(bv - it.b[r])>1e-4) correct=false;
+  }
+  return correct;
+}
+
+// Avançar para próxima iteração
+function nextIteration(){
+  if(currentIter>=autoIterations.length) return;
+  const correct = checkIteration(currentIter);
+  const fb = document.getElementById('feedback');
+  if(correct) fb.innerText='✅ Iteração correta!';
+  else fb.innerText='❌ Iteração incorreta, revise os valores.';
+  currentIter++;
+  if(currentIter<autoIterations.length){
+    renderStudentIteration(currentIter);
+  } else {
+    document.getElementById('finalize').style.display='inline-block';
+    fb.innerText+=' Todas as iterações preenchidas.';
+  }
+}
+
+// Gerar PDF
+function generatePDF(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.text(`Relatório do Aluno: ${studentName}`,10,10);
+  doc.text('Problema: Max z = -x1² +6x1 -2x2² +8x2',10,20);
+  autoIterations.forEach((it,i)=>{
+    doc.text(`Iteração ${i+1}`,10,30 + i*10);
   });
-  document.getElementById('feedback').innerText='✅ Resolução automática completa.';
-  document.getElementById('feedback').className='status ok';
+  doc.save(`${studentName}_KKT.pdf`);
 }
 
 // --- Eventos ---
-document.getElementById('autoSolve').addEventListener('click', solveAutomatic);
+document.getElementById('start').addEventListener('click', ()=>{
+  studentName = document.getElementById('studentName').value.trim() || 'Aluno';
+  solveAutomatic();
+  currentIter=0;
+  document.getElementById('iterationsArea').innerHTML='';
+  renderStudentIteration(currentIter);
+});
+
+document.getElementById('iterationsArea').addEventListener('change', nextIteration);
+
+document.getElementById('finalize').addEventListener('click', generatePDF);
 </script>
 </body>
 </html>
-
