@@ -6,7 +6,7 @@
 <title>Simplex KKT Dinâmico - Passo a Passo</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
-h1{font-size:22px;margin-bottom:12px}
+h1,h2{margin-bottom:12px}
 .input-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
 input[type="text"]{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;width:80px;text-align:right}
 input.basicVar{width:60px;text-align:center}
@@ -22,7 +22,15 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 </head>
 <body>
 
-<h1>Simplex KKT Dinâmico - Max z = -x1² +6x1 -2x2² +8x2</h1>
+<h1>Simplex KKT - Passo a Passo</h1>
+
+<h2>Problema:</h2>
+<p id="problemText">
+Maximizar z = -x1² + 6x1 - 2x2² + 8x2<br>
+Sujeito a:<br>
+2x1 + 4x2 ≤ 8<br>
+x1 ≥ 0, x2 ≥ 0
+</p>
 
 <div class="input-row">
 <label>Aluno:</label>
@@ -36,15 +44,14 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-
-// --- Variáveis globais ---
+// Variáveis globais
 let studentName = '';
-let tableaux = [];       // Array de tabelas geradas
-let currentIter = 0;     // Iteração atual
-let scores = [];         // Notas parciais
+let tableaux = [];
+let currentIter = 0;
+let scores = [];
 const varNames = ['x1','x2','x3','y1','y2','y3'];
 
-// --- Funções utilitárias ---
+// Funções utilitárias
 function parseInput(val){
   val = val.trim();
   if(!val) return NaN;
@@ -60,11 +67,10 @@ function isCorrect(valAluno, valCorreto){
   return Math.abs(parseInput(valAluno) - valCorreto) < 1e-6;
 }
 
-// --- Classe Simplex KKT ---
+// Classe Simplex KKT
 class SimplexKKT {
   constructor(){
-    // Inicial tabela
-    this.base = ['x3','y1','y2'];  // Base inicial
+    this.base = ['x3','y1','y2']; // Base inicial
     this.A = [
       [2,4,1,0,0,0],
       [-2,0,0,1,0,-2],
@@ -75,7 +81,6 @@ class SimplexKKT {
     this.saveIteration();
   }
 
-  // Salva uma cópia da tabela atual
   saveIteration(){
     const Acopy = this.A.map(row=>[...row]);
     const bcopy = [...this.b];
@@ -83,56 +88,51 @@ class SimplexKKT {
     this.iterations.push({baseVars:baseCopy,A:Acopy,b:bcopy});
   }
 
-  // Determina próxima iteração automaticamente
   nextIteration(){
-    // vetor de avaliação (simples: olhar colunas fora da base)
-    // Identifica variável candidata a entrar: mais negativa em primeira linha
-    let mostNeg = 0; let entering=-1;
+    // Encontra candidato a entrar: primeira coluna fora da base mais negativa
+    let entering=-1; let mostNeg=0;
     for(let j=0;j<varNames.length;j++){
       if(!this.base.includes(varNames[j])){
-        const val = this.A[1][j]; // pegando coeficiente da função (simplificado para exemplo)
+        let val=0;
+        for(let i=0;i<this.A.length;i++){
+          if(this.base[i].startsWith('y')) val+=this.A[i][j];
+        }
         if(val<mostNeg){ mostNeg=val; entering=j; }
       }
     }
     if(entering===-1) return false; // ótimo atingido
 
-    // Variável a sair: complementar da que entra
-    const leaving = this.base.findIndex(bv=>{
-      if(bv.startsWith('x')) return bv==='y'+varNames[entering].slice(1); // exemplo
-      if(bv.startsWith('y')) return bv==='x'+varNames[entering].slice(1);
-      return false;
+    // Determina saída: complementar da que entra
+    const leaving=this.base.findIndex(bv=>{
+      return (bv.startsWith('x') && 'y'+bv.slice(1)===varNames[entering])||
+             (bv.startsWith('y') && 'x'+bv.slice(1)===varNames[entering]);
     });
     if(leaving===-1) return false;
 
-    // Pivot: aqui mantemos tabela como está, para o aluno preencher manualmente
-    // Atualiza base
+    // Pivot simplificado: apenas troca base para o aluno preencher
     this.base[leaving]=varNames[entering];
-
     this.saveIteration();
     return true;
   }
 }
 
-// --- Inicialização ---
-let simplex = null;
-
+// Inicialização
+let simplex=null;
 function start(){
   studentName = document.getElementById('studentName').value.trim();
   if(!studentName){ alert('Digite seu nome!'); return; }
 
   simplex = new SimplexKKT();
-
-  // Gera todas as iterações até o ótimo (para referência de correção)
+  // Gera iterações até o ótimo
   while(simplex.nextIteration()){}
-
   tableaux = simplex.iterations;
   currentIter=0;
-  scores = [];
+  scores=[];
   renderIteration(currentIter);
   document.getElementById('feedback').innerText='Preencha a primeira tabela e clique em "Verificar Iteração".';
 }
 
-// --- Render tabela ---
+// Renderiza tabela da iteração
 function renderIteration(idx){
   const iter = tableaux[idx];
   const area = document.getElementById('iterationsArea');
@@ -141,62 +141,52 @@ function renderIteration(idx){
   div.innerHTML = `<strong>Iteração ${idx+1}:</strong>`;
   const tbl = document.createElement('table');
 
-  // Cabeçalho
   const thead = document.createElement('thead');
   const htr = document.createElement('tr');
   htr.innerHTML = '<th>Base</th>' + varNames.map(v=>`<th>${v}</th>`).join('') + '<th>b</th>';
   thead.appendChild(htr);
   tbl.appendChild(thead);
 
-  // Corpo
   const tbody = document.createElement('tbody');
   for(let i=0;i<iter.baseVars.length;i++){
     const tr = document.createElement('tr');
-    const tdBase = document.createElement('td');
-    const inputBase = document.createElement('input');
-    inputBase.type='text'; inputBase.className='basicVar';
-    inputBase.dataset.row=i;
+    const tdBase=document.createElement('td');
+    const inputBase=document.createElement('input');
+    inputBase.type='text'; inputBase.className='basicVar'; inputBase.dataset.row=i;
     tdBase.appendChild(inputBase);
     tr.appendChild(tdBase);
 
     for(let j=0;j<varNames.length;j++){
-      const td = document.createElement('td');
-      const input = document.createElement('input');
-      input.type='text';
-      input.dataset.row=i;
-      input.dataset.col=j;
-      td.appendChild(input);
-      tr.appendChild(td);
+      const td=document.createElement('td');
+      const input=document.createElement('input');
+      input.type='text'; input.dataset.row=i; input.dataset.col=j;
+      td.appendChild(input); tr.appendChild(td);
     }
 
-    const tdB = document.createElement('td');
-    const inputB = document.createElement('input');
-    inputB.type='text';
-    inputB.dataset.row=i;
-    inputB.dataset.b=true;
-    tdB.appendChild(inputB);
-    tr.appendChild(tdB);
+    const tdB=document.createElement('td');
+    const inputB=document.createElement('input');
+    inputB.type='text'; inputB.dataset.row=i; inputB.dataset.b=true;
+    tdB.appendChild(inputB); tr.appendChild(tdB);
 
     tbody.appendChild(tr);
   }
   tbl.appendChild(tbody);
   div.appendChild(tbl);
 
-  const btn = document.createElement('button');
+  const btn=document.createElement('button');
   btn.innerText='Verificar Iteração';
-  btn.addEventListener('click',()=>checkIteration(idx, div, tbl));
+  btn.addEventListener('click',()=>checkIteration(idx,div,tbl));
   div.appendChild(btn);
-
   area.appendChild(div);
 }
 
-// --- Verificação ---
-function checkIteration(idx, div, tbl){
-  const iter = tableaux[idx];
-  let correct=0, total=0;
+// Verifica tabela preenchida pelo aluno
+function checkIteration(idx,div,tbl){
+  const iter=tableaux[idx];
+  let correct=0,total=0;
 
   // Base
-  const inputsBase = tbl.querySelectorAll('input.basicVar');
+  const inputsBase=tbl.querySelectorAll('input.basicVar');
   inputsBase.forEach((inp,i)=>{
     total++;
     if(inp.value.trim()===iter.baseVars[i]) inp.parentElement.className='correct', correct++;
@@ -207,7 +197,7 @@ function checkIteration(idx, div, tbl){
   for(let i=0;i<iter.baseVars.length;i++){
     for(let j=0;j<varNames.length;j++){
       total++;
-      const inp = tbl.querySelector(`input[data-row='${i}'][data-col='${j}']`);
+      const inp=tbl.querySelector(`input[data-row='${i}'][data-col='${j}']`);
       if(isCorrect(inp.value, iter.A[i][j])) inp.parentElement.className='correct', correct++;
       else inp.parentElement.className='wrong';
     }
@@ -216,18 +206,17 @@ function checkIteration(idx, div, tbl){
   // b
   for(let i=0;i<iter.baseVars.length;i++){
     total++;
-    const inp = tbl.querySelector(`input[data-row='${i}'][data-b]`);
+    const inp=tbl.querySelector(`input[data-row='${i}'][data-b]`);
     if(isCorrect(inp.value, iter.b[i])) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   }
 
-  scores[idx] = Math.round(100*correct/total);
+  scores[idx]=Math.round(100*correct/total);
 
-  const fb = document.getElementById('feedback');
+  const fb=document.getElementById('feedback');
   fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos. Nota: ${scores[idx]}%`;
   fb.className='status '+(correct===total?'ok':'error');
 
-  // Próxima iteração
   if(idx+1<tableaux.length){
     currentIter++;
     renderIteration(currentIter);
@@ -237,7 +226,7 @@ function checkIteration(idx, div, tbl){
   }
 }
 
-// --- PDF ---
+// PDF
 document.getElementById('downloadPdf').addEventListener('click',()=>{
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -246,13 +235,13 @@ document.getElementById('downloadPdf').addEventListener('click',()=>{
   tableaux.forEach((t,i)=>{
     doc.text(`Iteração ${i+1}: Nota ${scores[i]}%`,10,20+i*10);
   });
-  const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+  const avg=Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
   doc.text(`Nota final: ${avg}%`,10,40+tableaux.length*10);
   doc.save(`relatorio_${studentName.replace(/\s/g,'_')}.pdf`);
 });
 
 document.getElementById('startBtn').addEventListener('click',start);
-
 </script>
 </body>
 </html>
+
