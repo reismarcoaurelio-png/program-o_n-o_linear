@@ -123,6 +123,42 @@ function renderStudentIteration(iterIdx){
     tbl.appendChild(tr);
   }
   area.appendChild(tbl);
+
+  // Botão para verificar a iteração
+  const btnCheck = document.createElement('button');
+  btnCheck.innerText = 'Verificar Iteração';
+  btnCheck.onclick = ()=>{
+    const correct = checkIteration(iterIdx);
+    const fb = document.getElementById('feedback');
+    if(correct){
+      fb.innerText='✅ Iteração correta! Clique em "Próxima Iteração" para continuar.';
+      fb.className='status ok';
+      document.getElementById('nextIterBtn').style.display='inline-block';
+    } else {
+      fb.innerText='❌ Iteração incorreta, revise os valores.';
+      fb.className='status error';
+    }
+  };
+  area.appendChild(btnCheck);
+
+  // Botão para próxima iteração
+  const nextBtn = document.createElement('button');
+  nextBtn.id='nextIterBtn';
+  nextBtn.innerText='Próxima Iteração';
+  nextBtn.style.display='none';
+  nextBtn.onclick = ()=>{
+    currentIter++;
+    if(currentIter<autoIterations.length){
+      renderStudentIteration(currentIter);
+      document.getElementById('nextIterBtn').style.display='none';
+    } else {
+      document.getElementById('finalize').style.display='inline-block';
+      const fb = document.getElementById('feedback');
+      fb.innerText='✅ Todas as iterações preenchidas. Pode gerar o relatório.';
+      fb.className='status ok';
+    }
+  };
+  area.appendChild(nextBtn);
 }
 
 // Verificar iteração do aluno
@@ -149,22 +185,6 @@ function checkIteration(iterIdx){
   return correct;
 }
 
-// Avançar para próxima iteração
-function nextIteration(){
-  if(currentIter>=autoIterations.length) return;
-  const correct = checkIteration(currentIter);
-  const fb = document.getElementById('feedback');
-  if(correct) fb.innerText='✅ Iteração correta!';
-  else fb.innerText='❌ Iteração incorreta, revise os valores.';
-  currentIter++;
-  if(currentIter<autoIterations.length){
-    renderStudentIteration(currentIter);
-  } else {
-    document.getElementById('finalize').style.display='inline-block';
-    fb.innerText+=' Todas as iterações preenchidas.';
-  }
-}
-
 // Gerar PDF
 function generatePDF(){
   const { jsPDF } = window.jspdf;
@@ -172,7 +192,7 @@ function generatePDF(){
   doc.text(`Relatório do Aluno: ${studentName}`,10,10);
   doc.text('Problema: Max z = -x1² +6x1 -2x2² +8x2',10,20);
   autoIterations.forEach((it,i)=>{
-    doc.text(`Iteração ${i+1}`,10,30 + i*10);
+    doc.text(`Iteração ${i+1}: Base = ${it.base.join(', ')}`,10,30 + i*10);
   });
   doc.save(`${studentName}_KKT.pdf`);
 }
@@ -185,8 +205,6 @@ document.getElementById('start').addEventListener('click', ()=>{
   document.getElementById('iterationsArea').innerHTML='';
   renderStudentIteration(currentIter);
 });
-
-document.getElementById('iterationsArea').addEventListener('change', nextIteration);
 
 document.getElementById('finalize').addEventListener('click', generatePDF);
 </script>
