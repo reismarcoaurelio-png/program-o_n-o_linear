@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Simplex KKT Manual</title>
+<title>Simplex KKT Manual - Frações Aceitas</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1{font-size:22px;margin-bottom:12px}
@@ -36,64 +36,50 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// --- Problema fixo ---
-const varNames = ['x1','x2','x3','y1','y2','y3']; // sistema KKT
-
+const varNames = ['x1','x2','x3','y1','y2','y3']; 
 let studentName = '';
 let currentTableau = 0;
 
-// --- Tabelas calculadas (inicial) ---
-let tableaux = []; // cada elemento: {baseVars:[], A:[], b:[]}
-
-// Função para gerar tabela inicial
-function generateInitialTableau(){
-  // Iteração 1
-  const baseVars = ['x3','y1','y2'];
-  const A = [
-    [2,4,1,0,0,0],
-    [-2,0,0,1,0,-2],
-    [0,-4,0,0,1,-4]
-  ];
-  const b = [8,-6,-8];
-  tableaux.push({baseVars,A,b});
-}
-
-// Função para gerar próxima tabela (pivoteamento automático)
-function pivotTableau(prevTableau, rowOutIdx, colInIdx){
-  const A = prevTableau.A.map(r=>r.slice()); // deep copy
-  const b = prevTableau.b.slice();
-  const baseVars = prevTableau.baseVars.slice();
-  
-  const pivot = A[rowOutIdx][colInIdx];
-  if(Math.abs(pivot)<1e-6) return null;
-
-  // Dividir linha pivot
-  for(let j=0;j<A[rowOutIdx].length;j++) A[rowOutIdx][j] /= pivot;
-  b[rowOutIdx] /= pivot;
-
-  // Eliminação nas outras linhas
-  for(let i=0;i<A.length;i++){
-    if(i!==rowOutIdx){
-      const factor = A[i][colInIdx];
-      for(let j=0;j<A[i].length;j++){
-        A[i][j] -= factor*A[rowOutIdx][j];
-      }
-      b[i] -= factor*b[rowOutIdx];
-    }
+// --- Função para interpretar frações ---
+function parseInput(val){
+  val = val.trim();
+  if(val.includes('/')){
+    const parts = val.split('/');
+    return parseFloat(parts[0])/parseFloat(parts[1]);
+  } else {
+    return parseFloat(val);
   }
-
-  // Trocar variável na base
-  baseVars[rowOutIdx] = varNames[colInIdx];
-
-  return {baseVars,A,b};
 }
 
-// --- Render ---
+// --- Tabelas preparadas (KKT) ---
+const tableaux = [
+  // Iteração 1
+  {
+    baseVars:['x3','y1','y2'],
+    A:[
+      [2,4,1,0,0,0],
+      [-2,0,0,1,0,-2],
+      [0,-4,0,0,1,-4]
+    ],
+    b:[8,-6,-8]
+  },
+  // Iteração 2 (x2 entra, y2 sai)
+  {
+    baseVars:['x3','y1','x2'],
+    A:[
+      [2,0,1,0,1,-4],
+      [-2,0,0,1,0,-2],
+      [0,1,0,0,0,0.25]
+    ],
+    b:[0,-6,1]
+  }
+];
+
+// --- Inicialização ---
 function buildProblem(){
   studentName = document.getElementById('studentName').value.trim();
   if(!studentName){ alert('Digite seu nome!'); return; }
 
-  generateInitialTableau();
   document.getElementById('problemArea').innerHTML = `<strong>Problema:</strong><br>
   Max z = -x1² +6x1 -2x2² +8x2<br>
   Sujeito a: 2x1+4x2 ≤ 8, x1≥0, x2≥0<br>
@@ -104,7 +90,7 @@ function buildProblem(){
   renderTableau(currentTableau);
 }
 
-// --- Render tabela interativa ---
+// --- Render tabela ---
 function renderTableau(idx){
   const tableau = tableaux[idx];
   const area = document.getElementById('iterationsArea');
@@ -133,7 +119,7 @@ function renderTableau(idx){
     for(let j=0;j<varNames.length;j++){
       const td = document.createElement('td');
       const input = document.createElement('input');
-      input.type='number'; input.step='0.01';
+      input.type='text';
       input.dataset.row=i;
       input.dataset.col=j;
       td.appendChild(input);
@@ -142,7 +128,7 @@ function renderTableau(idx){
     // b
     const tdB = document.createElement('td');
     const inputB = document.createElement('input');
-    inputB.type='number'; inputB.step='0.01';
+    inputB.type='text';
     inputB.dataset.row=i;
     inputB.dataset.b=true;
     tdB.appendChild(inputB);
@@ -177,7 +163,7 @@ function checkTableau(idx){
     for(let j=0;j<varNames.length;j++){
       total++;
       const inp = document.querySelector(`input[data-row='${i}'][data-col='${j}']`);
-      if(Math.abs(+inp.value - tableau.A[i][j])<1e-2) inp.parentElement.className='correct', correct++;
+      if(Math.abs(parseInput(inp.value) - tableau.A[i][j])<1e-2) inp.parentElement.className='correct', correct++;
       else inp.parentElement.className='wrong';
     }
   }
@@ -186,7 +172,7 @@ function checkTableau(idx){
   for(let i=0;i<tableau.baseVars.length;i++){
     total++;
     const inp = document.querySelector(`input[data-row='${i}'][data-b]`);
-    if(Math.abs(+inp.value - tableau.b[i])<1e-2) inp.parentElement.className='correct', correct++;
+    if(Math.abs(parseInput(inp.value) - tableau.b[i])<1e-2) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   }
 
@@ -194,16 +180,12 @@ function checkTableau(idx){
   fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos`;
   fb.className='status '+(correct===total?'ok':'error');
 
-  // Preparar próxima iteração de exemplo (manual)
-  if(idx===0 && tableaux.length<2){
-    const nextTableau = pivotTableau(tableaux[0],0,0); // Exemplo pivot: x1 entra, x3 sai
-    tableaux.push(nextTableau);
-  }
-
   // Avançar para próxima iteração
   if(idx+1<tableaux.length){
     currentTableau++;
     renderTableau(currentTableau);
+  } else {
+    fb.innerText += " ✅ Todas as iterações completadas!";
   }
 }
 
