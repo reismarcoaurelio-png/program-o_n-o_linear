@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Simplex KKT - Interativo</title>
+<title>Simplex KKT Interativo Corrigido</title>
 <style>
 body{font-family:Arial,sans-serif;padding:18px;background:#f7f9fb;color:#111}
 h1,h2{margin-bottom:12px}
@@ -26,7 +26,7 @@ td.wrong{background:#fee2e2;color:#9b1c1c}
 
 <h2>Problema:</h2>
 <p id="problemText">
-Maximizar z = -x1² + 6x1 - 2x2² + 8x2<br>
+Max z = -x1² + 6x1 - 2x2² + 8x2<br>
 Sujeito a:<br>
 2x1 + 4x2 ≤ 8<br>
 x1 ≥ 0, x2 ≥ 0
@@ -44,33 +44,29 @@ x1 ≥ 0, x2 ≥ 0
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// --- Utilitários para frações e decimais ---
+// --- Funções utilitárias ---
 function parseInput(val){
   val = val.trim();
   if(!val) return NaN;
   if(val.includes('/')){
     const parts = val.split('/');
     return parseFloat(parts[0])/parseFloat(parts[1]);
-  } else {
-    return parseFloat(val);
-  }
+  } else return parseFloat(val);
 }
 function isCorrect(valAluno, valCorreto){
-  let a = parseInput(valAluno);
-  let c = parseFloat(valCorreto);
-  return Math.abs(a - c) < 1e-6;
+  let a=parseInput(valAluno);
+  let c=parseFloat(valCorreto);
+  return Math.abs(a-c)<1e-6;
 }
 
-// --- Dados KKT ---
-const varNames = ['x1','x2','x3','y1','y2','y3'];
-let studentName='', tableaux=[], currentIter=0,scores=[];
+// --- Dados ---
+const varNames=['x1','x2','x3','y1','y2','y3'];
+let studentName='', tableaux=[], currentIter=0, scores=[];
 
-// --- Classe Simplex KKT ---
+// --- Simplex KKT com pivot real ---
 class SimplexKKT{
   constructor(){
-    // Base inicial
-    this.base=['x3','y1','y2'];
-    // Matriz A: cada linha é uma equação do KKT
+    this.base=['x3','y1','y2']; // Base inicial
     this.A=[
       [2,4,1,0,0,0],
       [-2,0,0,1,0,-2],
@@ -80,60 +76,45 @@ class SimplexKKT{
     this.iterations=[];
     this.saveIteration();
   }
-
   saveIteration(){
-    // Salva cópia da tabela atual
     this.iterations.push({
       baseVars:[...this.base],
       A:this.A.map(r=>[...r]),
       b:[...this.b]
     });
   }
-
-  pivot(row, col){
-    // Pivot simples numericamente (linha: row, coluna: col)
+  pivot(row,col){
     const pivotVal=this.A[row][col];
-    // Normaliza a linha do pivot
     for(let j=0;j<this.A[row].length;j++) this.A[row][j]/=pivotVal;
     this.b[row]/=pivotVal;
-    // Zera coluna nas outras linhas
     for(let i=0;i<this.A.length;i++){
       if(i===row) continue;
       const factor=this.A[i][col];
       for(let j=0;j<this.A[i].length;j++) this.A[i][j]-=factor*this.A[row][j];
       this.b[i]-=factor*this.b[row];
     }
-    // Troca base
     this.base[row]=varNames[col];
     this.saveIteration();
   }
-
-  // Retorna índice de variável candidata a entrar (mais negativa)
   enteringVar(){
     let minVal=0, idx=-1;
     for(let j=0;j<varNames.length;j++){
       if(!this.base.includes(varNames[j])){
         let val=0;
-        for(let i=0;i<this.A.length;i++){
-          val+=this.A[i][j]; // soma coeficientes
-        }
+        for(let i=0;i<this.A.length;i++) val+=this.A[i][j];
         if(val<minVal){ minVal=val; idx=j; }
       }
     }
     return idx;
   }
-
-  // Determina saída (complementar)
   leavingVar(enterCol){
     for(let i=0;i<this.base.length;i++){
       const bv=this.base[i];
-      const comp = (bv.startsWith('x') ? 'y'+bv.slice(1) : 'x'+bv.slice(1));
+      const comp = (bv.startsWith('x')?'y'+bv.slice(1):'x'+bv.slice(1));
       if(varNames[enterCol]===comp) return i;
     }
     return -1;
   }
-
-  // Executa próxima iteração
   nextIteration(){
     const enter=this.enteringVar();
     if(enter===-1) return false;
@@ -148,14 +129,11 @@ class SimplexKKT{
 let simplex=null;
 function start(){
   studentName=document.getElementById('studentName').value.trim();
-  if(!studentName){ alert('Digite seu nome!'); return; }
-
+  if(!studentName){ alert('Digite seu nome'); return; }
   simplex=new SimplexKKT();
-  // Gera iterações até o ótimo
   while(simplex.nextIteration()){}
   tableaux=simplex.iterations;
-  currentIter=0;
-  scores=[];
+  currentIter=0; scores=[];
   renderIteration(currentIter);
   document.getElementById('feedback').innerText='Preencha a primeira tabela e clique em "Verificar Iteração".';
 }
@@ -168,13 +146,11 @@ function renderIteration(idx){
   div.className='iteration';
   div.innerHTML=`<strong>Iteração ${idx+1}:</strong>`;
   const tbl=document.createElement('table');
-
   const thead=document.createElement('thead');
   const htr=document.createElement('tr');
   htr.innerHTML='<th>Base</th>'+varNames.map(v=>`<th>${v}</th>`).join('')+'<th>b</th>';
   thead.appendChild(htr);
   tbl.appendChild(thead);
-
   const tbody=document.createElement('tbody');
   for(let i=0;i<iter.baseVars.length;i++){
     const tr=document.createElement('tr');
@@ -182,24 +158,20 @@ function renderIteration(idx){
     const inputBase=document.createElement('input');
     inputBase.type='text'; inputBase.className='basicVar'; inputBase.dataset.row=i;
     tdBase.appendChild(inputBase); tr.appendChild(tdBase);
-
     for(let j=0;j<varNames.length;j++){
       const td=document.createElement('td');
       const input=document.createElement('input');
       input.type='text'; input.dataset.row=i; input.dataset.col=j;
       td.appendChild(input); tr.appendChild(td);
     }
-
     const tdB=document.createElement('td');
     const inputB=document.createElement('input');
     inputB.type='text'; inputB.dataset.row=i; inputB.dataset.b=true;
     tdB.appendChild(inputB); tr.appendChild(tdB);
-
     tbody.appendChild(tr);
   }
   tbl.appendChild(tbody);
   div.appendChild(tbl);
-
   const btn=document.createElement('button');
   btn.innerText='Verificar Iteração';
   btn.addEventListener('click',()=>checkIteration(idx,div,tbl));
@@ -211,16 +183,11 @@ function renderIteration(idx){
 function checkIteration(idx,div,tbl){
   const iter=tableaux[idx];
   let correct=0,total=0;
-
-  // Base
   const inputsBase=tbl.querySelectorAll('input.basicVar');
   inputsBase.forEach((inp,i)=>{
-    total++;
-    if(inp.value.trim()===iter.baseVars[i]) inp.parentElement.className='correct', correct++;
+    total++; if(inp.value.trim()===iter.baseVars[i]) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   });
-
-  // Coeficientes
   for(let i=0;i<iter.baseVars.length;i++){
     for(let j=0;j<varNames.length;j++){
       total++;
@@ -229,39 +196,27 @@ function checkIteration(idx,div,tbl){
       else inp.parentElement.className='wrong';
     }
   }
-
-  // b
   for(let i=0;i<iter.baseVars.length;i++){
     total++;
     const inp=tbl.querySelector(`input[data-row='${i}'][data-b]`);
     if(isCorrect(inp.value, iter.b[i])) inp.parentElement.className='correct', correct++;
     else inp.parentElement.className='wrong';
   }
-
   scores[idx]=Math.round(100*correct/total);
-
   const fb=document.getElementById('feedback');
   fb.innerText=`Iteração ${idx+1}: ${correct}/${total} valores corretos. Nota: ${scores[idx]}%`;
   fb.className='status '+(correct===total?'ok':'error');
-
-  if(idx+1<tableaux.length){
-    currentIter++;
-    renderIteration(currentIter);
-  } else {
-    fb.innerText += " ✅ Todas as iterações completadas!";
-    document.getElementById('downloadPdf').style.display='inline-block';
-  }
+  if(idx+1<tableaux.length){ currentIter++; renderIteration(currentIter);}
+  else{ fb.innerText += " ✅ Todas as iterações completadas!"; document.getElementById('downloadPdf').style.display='inline-block';}
 }
 
 // --- PDF ---
 document.getElementById('downloadPdf').addEventListener('click',()=>{
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc=new jsPDF();
   doc.setFontSize(12);
-  doc.text(`Aluno: ${studentName}`, 10, 10);
-  tableaux.forEach((t,i)=>{
-    doc.text(`Iteração ${i+1}: Nota ${scores[i]}%`,10,20+i*10);
-  });
+  doc.text(`Aluno: ${studentName}`,10,10);
+  tableaux.forEach((t,i)=>{ doc.text(`Iteração ${i+1}: Nota ${scores[i]}%`,10,20+i*10); });
   const avg=Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
   doc.text(`Nota final: ${avg}%`,10,40+tableaux.length*10);
   doc.save(`relatorio_${studentName.replace(/\s/g,'_')}.pdf`);
@@ -269,6 +224,6 @@ document.getElementById('downloadPdf').addEventListener('click',()=>{
 
 document.getElementById('startBtn').addEventListener('click',start);
 </script>
+
 </body>
 </html>
-
