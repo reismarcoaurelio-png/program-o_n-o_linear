@@ -28,28 +28,6 @@ button { padding:6px 10px; margin:5px; }
 </select>
 </label>
 
-  <div class="card">
-  <div class="small">Informe os coeficientes da função objetivo (maximizar):</div>
-  <div class="row" style="margin-top:8px">
-    <label>coef x1²: <input id="c_x1sq" type="number" step="any" value="-1"></label>
-    <label>coef x2²: <input id="c_x2sq" type="number" step="any" value="-2"></label>
-    <label>coef x1x2: <input id="c_x1x2" type="number" step="any" value="0"></label>
-    <label>coef x1: <input id="c_x1" type="number" step="any" value="6"></label>
-    <label>coef x2: <input id="c_x2" type="number" step="any" value="8"></label>
-  </div>
-
-  <div style="margin-top:10px" class="small">Restrição linear (<=):</div>
-  <div class="row" style="margin-top:8px">
-    <label>a1 (x1): <input id="a1" type="number" step="any" value="2"></label>
-    <label>a2 (x2): <input id="a2" type="number" step="any" value="4"></label>
-    <label>b: <input id="b" type="number" step="any" value="8"></label>
-  </div>
-
-  <div style="margin-top:12px" class="small">
-    Observação: as restrições x1≥0, x2≥0 são implícitas. O aluno só altera os coeficientes acima.
-  </div>
-
-
 <br><br>
 <button id="start">Iniciar Iterações</button>
 <div id="iterationsArea"></div>
